@@ -60,6 +60,10 @@ jobs:
         working-directory: trunk
         run: cp "configs/templates/${{ matrix.board }}.config" .config
 
+      - name: Download source tarballs (strongswan)
+        if: ${{ matrix.slug == 'xiaomi-mi-r3p_spi' }}
+        run: make -C user/strongswan download_test
+
       - name: Build firmware
         working-directory: trunk
         run: ./build_firmware.sh
