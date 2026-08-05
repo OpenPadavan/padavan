@@ -1,0 +1,30 @@
+# Source code / text
+* text=auto
+
+# License & docs
+README.md       text
+LICENSE.md      text
+trunk/License   text
+
+# Shell scripts
+*.sh            text eol=lf
+Makefile        text eol=lf
+
+# Firmware UI scripts
+*.js            text
+*.html          text
+*.asp           text
+
+# Board config files
+*.config        text eol=lf
+*.mk            text eol=lf
+*.inc           text
+
+# Binary artifacts that must not be normalized
+*.dat           binary
+*.gz            binary
+*.bz2           binary
+*.xz            binary
+*.7z            binary
+*.bin           binary
+*.img           binary

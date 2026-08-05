@@ -1,0 +1,67 @@
+name: build
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: padavan-build
+
+jobs:
+  build-image:
+    name: Build container image
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build container image
+        run: docker build -t "$IMAGE_NAME" -f Dockerfile .
+
+      - name: Push image to GHCR
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          IMG="ghcr.io/${{ github.repository_owner }}/$IMAGE_NAME"
+          docker tag "$IMAGE_NAME" "$IMG:latest"
+          docker push "$IMG:latest"
+
+  build-firmware:
+    name: Build firmware
+    runs-on: ubuntu-22.04
+    needs: build-image
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [ asus/rt-n56u ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf autoconf-archive automake autopoint bison build-essential ca-certificates cmake cpio curl dos2unix doxygen fakeroot flex gawk gettext git gperf help2man kmod libarchive-tools libblkid-dev libc-ares-dev libcurl4-openssl-dev libdevmapper-dev libev-dev libevent-dev libexif-dev libflac-dev libgmp3-dev libid3tag0-dev libidn2-dev libjpeg-dev libkeyutils-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libogg-dev libsqlite3-dev libssl-dev libsystemd-dev libtool libtool-bin libudev-dev libunbound-dev libvorbis-dev libxml2-dev locales pkg-config ppp-dev python3 python3-docutils texinfo unzip uuid uuid-dev wget xxd zlib1g-dev
+
+      - name: Build toolchain
+        working-directory: toolchain
+        run: ./build_toolchain.sh
+
+      - name: Select board configuration
+        working-directory: trunk
+        run: cp "configs/templates/${{ matrix.board }}.config" .config
+
+      - name: Build firmware
+        working-directory: trunk
+        run: ./build_firmware.sh
+
+      - name: Upload firmware images
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.board }}
+          path: trunk/images/*
+          if-no-files-found: ignore
