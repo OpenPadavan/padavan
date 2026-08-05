@@ -43,6 +43,8 @@ jobs:
             slug: unielec-u7621-06
           - board: xiaomi/mi-r3p_spi
             slug: xiaomi-mi-r3p_spi
+          - board: xiaomi/mi-r3pro
+            slug: xiaomi-mi-r3pro
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,7 +63,7 @@ jobs:
         run: cp "configs/templates/${{ matrix.board }}.config" .config
 
       - name: Download source tarballs (strongswan)
-        if: ${{ matrix.slug == 'xiaomi-mi-r3p_spi' }}
+        if: ${{ matrix.slug == 'xiaomi-mi-r3p_spi' || matrix.slug == 'xiaomi-mi-r3pro' }}
         working-directory: trunk
         run: make -C user/strongswan download_test
 
