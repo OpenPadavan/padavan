@@ -41,6 +41,8 @@ jobs:
             slug: tplink-tl_wr840n-v6
           - board: unielec/u7621-06
             slug: unielec-u7621-06
+          - board: xiaomi/mi-r3p_spi
+            slug: xiaomi-mi-r3p_spi
     steps:
       - name: Checkout
         uses: actions/checkout@v4
