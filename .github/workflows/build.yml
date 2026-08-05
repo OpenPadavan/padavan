@@ -57,6 +57,7 @@ jobs:
             BOARD="${{ env.DEFAULT_BOARD }}"
           fi
           echo "BOARD=$BOARD" >> $GITHUB_ENV
+          echo "SLUG=${BOARD//\//-}" >> $GITHUB_ENV
           echo "Building board: $BOARD"
 
       - name: Install dependencies
@@ -84,6 +85,6 @@ jobs:
       - name: Upload firmware images
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ env.BOARD }}
+          name: firmware-${{ env.SLUG }}
           path: trunk/images/*
           if-no-files-found: ignore
