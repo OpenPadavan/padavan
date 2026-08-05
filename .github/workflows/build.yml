@@ -37,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        board: [ asus/rt-n56u ]
+        board: [ asus/rt-n56u, gl/gl-mt300a, unielec/u7621-06, tplink/tl_wr840n-v6 ]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

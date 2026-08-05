@@ -1,0 +1,17 @@
+# Build artifacts
+trunk/romfs/
+trunk/images/
+trunk/stage/
+trunk/.config
+toolchain/out/
+
+# Editor swap / backup files
+*.swp
+*.swo
+*~
+*.orig
+*.rej
+
+# OS files
+.DS_Store
+Thumbs.db
