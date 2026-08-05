@@ -29,6 +29,7 @@ configure:
 		--prefix=/ \
 		--enable-static \
 		--disable-shared \
+		--with-python3=no \
 		--host=$(HOST_TARGET) \
 		--build=$(HOST_BUILD) ; \
 	)
