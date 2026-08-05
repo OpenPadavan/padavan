@@ -4,9 +4,20 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      board:
+        description: 'Router to build (manual runs)'
+        required: false
+        type: choice
+        options:
+          - xiaomi/mi-r3p_spi
+          - xiaomi/mi-r3pro
+          - unielec/u7621-06
+          - tplink/tl_wr840n-v6
 
 env:
   IMAGE_NAME: padavan-build
+  DEFAULT_BOARD: xiaomi/mi-r3p_spi
 
 jobs:
   build-image:
@@ -33,21 +44,20 @@ jobs:
   build-firmware:
     name: Build firmware
     runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - board: tplink/tl_wr840n-v6
-            slug: tplink-tl_wr840n-v6
-          - board: unielec/u7621-06
-            slug: unielec-u7621-06
-          - board: xiaomi/mi-r3p_spi
-            slug: xiaomi-mi-r3p_spi
-          - board: xiaomi/mi-r3pro
-            slug: xiaomi-mi-r3pro
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve board
+        id: resolve
+        run: |
+          if [[ -n "${{ inputs.board }}" ]]; then
+            BOARD="${{ inputs.board }}"
+          else
+            BOARD="${{ env.DEFAULT_BOARD }}"
+          fi
+          echo "BOARD=$BOARD" >> $GITHUB_ENV
+          echo "Building board: $BOARD"
 
       - name: Install dependencies
         run: |
@@ -60,10 +70,10 @@ jobs:
 
       - name: Select board configuration
         working-directory: trunk
-        run: cp "configs/templates/${{ matrix.board }}.config" .config
+        run: cp "configs/templates/$BOARD.config" .config
 
       - name: Download source tarballs (strongswan)
-        if: ${{ matrix.slug == 'xiaomi-mi-r3p_spi' || matrix.slug == 'xiaomi-mi-r3pro' }}
+        if: ${{ env.BOARD == 'xiaomi/mi-r3p_spi' || env.BOARD == 'xiaomi/mi-r3pro' }}
         working-directory: trunk
         run: make -C user/strongswan download_test
 
@@ -74,6 +84,6 @@ jobs:
       - name: Upload firmware images
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ matrix.slug }}
+          name: firmware-${{ env.BOARD }}
           path: trunk/images/*
           if-no-files-found: ignore
