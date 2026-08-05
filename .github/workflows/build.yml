@@ -62,6 +62,7 @@ jobs:
 
       - name: Download source tarballs (strongswan)
         if: ${{ matrix.slug == 'xiaomi-mi-r3p_spi' }}
+        working-directory: trunk
         run: make -C user/strongswan download_test
 
       - name: Build firmware
