@@ -3,6 +3,7 @@
 *.orig
 *.rej
 *.pc
+!user/lua/lua-5.1.5/etc/lua.pc
 *.lo
 *.o
 *.o.cmd
