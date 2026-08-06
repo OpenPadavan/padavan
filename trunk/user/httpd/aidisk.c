@@ -683,7 +683,22 @@ ej_safely_remove_disk(int eid, webs_t wp, int argc, char **argv)
 {
 	int result, port_num;
 	char *disk_port = websGetVar(wp, "port", "");
-	char *disk_devn = websGetVar(wp, "devn", "");
+	char *disk_devn = NULL;
+	char *p;
+	int valid_devn = 1;
+
+	/* Only mount-device names (letters, digits, '/', '_', '.', '-') are
+	 * allowed.  Anything else is untrusted and would be fed to a shell. */
+	disk_devn = websGetVar(wp, "devn", "");
+	for (p = disk_devn; *p; p++) {
+		if (!isalnum((unsigned char)*p) && *p != '/' && *p != '_' &&
+		    *p != '.' && *p != '-') {
+			valid_devn = 0;
+			break;
+		}
+	}
+	if (!valid_devn)
+		disk_devn[0] = '\0';
 
 	port_num = atoi(disk_port);
 	if (port_num < 0)
@@ -874,8 +889,8 @@ ej_get_folder_tree(int eid, webs_t wp, int argc, char **argv)
 		*follow_info_end = backup;
 
 		if (layer == 3) {
-			memset(folder_code, 0, 1024);
-			strcpy(folder_code, follow_info);
+			memset(folder_code, 0, sizeof(folder_code));
+			snprintf(folder_code, sizeof(folder_code), "%s", follow_info);
 		}
 
 		follow_info = follow_info_end;

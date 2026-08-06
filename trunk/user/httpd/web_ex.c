@@ -552,7 +552,7 @@ ej_nvram_get_list_x(int eid, webs_t wp, int argc, char **argv)
 		return -1;
 	}
 
-	ret += websWrite(wp, nvram_get_list_x(name, which));
+	ret += websWrite(wp, "%s", nvram_get_list_x(name, which));
 	return ret;
 }
 
@@ -3478,7 +3478,7 @@ apply_cgi(const char *url, webs_t wp)
 				char *value1 = websGetVar(wp, "action_mode", NULL);
 				if (value1 != NULL) {
 					char groupId[64];
-					snprintf(groupId, sizeof(groupId), websGetVar(wp, "group_id", ""));
+					snprintf(groupId, sizeof(groupId), "%s", websGetVar(wp, "group_id", ""));
 
 					if (!strncmp(value1, " Delete ", 8))
 						apply_cgi_group(wp, sid, NULL, groupId, GROUP_FLAG_DELETE);
