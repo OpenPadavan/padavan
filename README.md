@@ -96,11 +96,31 @@ The build copies the board kernel/BusyBox configs, assembles the proprietary dri
 | WiFi 5 GHz | `Padavan_5GHz` |
 | WiFi password | `1234567890` |
 
-### Automated builds
+### Automated builds (GitHub Actions)
 
-Ready-made GitHub Actions workflows for building Padavan firmware on GitHub servers:
+This repository ships its own CI workflow (`.github/workflows/build.yml`) that builds firmware on GitHub's servers.
 
-- [padavan-builder-workflow](https://github.com/shvchk/padavan-builder-workflow) — automated Padavan firmware builds on GitHub servers
+**On every `push` to `main`**, the CI builds a single default board (`xiaomi/mi-r3p_spi`) and uploads the resulting image as a build artifact.
+
+**To build a specific router manually:**
+
+1. Open the **Actions** tab and select the **build** workflow.
+2. Click **Run workflow**.
+3. Pick the target router from the **Router to build** dropdown.
+4. Click the green **Run workflow** button.
+
+The dropdown currently offers:
+
+- `xiaomi/mi-r3p_spi` — Xiaomi Mi-R3P (SPI)
+- `xiaomi/mi-r3pro` — Xiaomi Mi-R3PRO
+- `unielec/u7621-06` — UniElec U7621-06
+- `tplink/tl_wr840n-v6` — TP-Link TL-WR840N v6
+
+Add more routers by appending entries to the `inputs.board.options` list in `.github/workflows/build.yml`. The default board built on every push is set by the `DEFAULT_BOARD` environment variable.
+
+Finished runs publish the firmware as downloadable artifacts (retained for a limited time, for personal use — the firmware license does not permit binary redistribution).
+
+> Reference workflow maintained by the community: [padavan-builder-workflow](https://github.com/shvchk/padavan-builder-workflow) — automated Padavan firmware builds on GitHub servers
 
 ## Contributing
 
