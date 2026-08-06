@@ -17,7 +17,7 @@ on:
 
 env:
   IMAGE_NAME: padavan-build
-  DEFAULT_BOARD: xiaomi/mi-r3p_spi
+  DEFAULT_BOARD: xiaomi/mi-r3pro
 
 jobs:
   build-image:

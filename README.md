@@ -100,7 +100,7 @@ The build copies the board kernel/BusyBox configs, assembles the proprietary dri
 
 This repository ships its own CI workflow (`.github/workflows/build.yml`) that builds firmware on GitHub's servers.
 
-**On every `push` to `main`**, the CI builds a single default board (`xiaomi/mi-r3p_spi`) and uploads the resulting image as a build artifact.
+**On every `push` to `main`**, the CI builds a single default board (`xiaomi/mi-r3pro`) and uploads the resulting image as a build artifact.
 
 **To build a specific router manually:**
 
