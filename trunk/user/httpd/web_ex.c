@@ -1979,6 +1979,15 @@ wol_action_hook(int eid, webs_t wp, int argc, char **argv)
 	if (!dst_mac)
 		return -1;
 
+	{
+		char *c;
+		for (c = dst_mac; *c; c++)
+			if (!isxdigit((unsigned char)*c) && *c != ':')
+				break;
+		if (*c)
+			dst_mac[0] = '\0';
+	}
+
 	if (strlen(dst_mac) == 12)
 	{
 		p1 = dst_mac;
