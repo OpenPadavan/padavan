@@ -149,13 +149,19 @@ stop_lpd(void)
 void
 start_p910nd(char *devlp)
 {
-	if (nvram_match("rawd_enable", "0")) 
+	const char *lan_ip;
+
+	if (nvram_match("rawd_enable", "0"))
 		return;
 
+	/* Bind to the LAN interface only, so p910nd is never exposed on the WAN.
+	 * Use the explicit (external) access via port-forward (DNAT) if needed. */
+	lan_ip = nvram_safe_get("lan_ipaddr");
+
 	if (nvram_match("rawd_enable", "2"))
-		eval("/usr/sbin/p910nd", "-b", "-f", devlp, "0");
+		eval("/usr/sbin/p910nd", "-b", "-i", lan_ip, "-f", devlp, "0");
 	else
-		eval("/usr/sbin/p910nd", "-f", devlp, "0");
+		eval("/usr/sbin/p910nd", "-i", lan_ip, "-f", devlp, "0");
 }
 
 void
