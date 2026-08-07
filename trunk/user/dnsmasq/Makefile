@@ -1,4 +1,4 @@
-SRC_NAME=dnsmasq-2.91
+SRC_NAME=dnsmasq-2.92rel2
 SRC_URL=https://thekelleys.org.uk/dnsmasq/$(SRC_NAME).tar.xz
 THISDIR = $(shell pwd)
 
