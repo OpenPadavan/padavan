@@ -1,5 +1,7 @@
 #!/bin/sh
 
+PID_FILE="/var/run/stubby.pid"
+
 func_start()
 {
 if [ ! -f "/etc/storage/stubby/stubby.yml" ]; then
@@ -45,15 +47,13 @@ EOF
 	echo 'Done!'
 fi
 
-if [ -f "/var/run/stubby_proxy.pid" ]; then
+if [ -f "$PID_FILE" ]; then
 		logger -t stubby "Stubby is running."
 	else
 		while [ `date +%s` -lt 1593374000 ] ; do
 		sleep 10
 		done
-		/usr/sbin/stubby -g $1 $2 $3 $4 $5 $6 $7 $8 $9
-###		/usr/sbin/stubby -g -l /tmp/stubby.log
-		touch /var/run/stubby_proxy.pid
+		/usr/sbin/stubby -g $(nvram get stubby_opt) >>"/tmp/stubby.log" 2>&1
 		logger -t stubby "Running."
 		sync && echo 3 > /proc/sys/vm/drop_caches
 fi
@@ -61,10 +61,10 @@ fi
 
 func_stop()
 {
-if [ -f "/var/run/stubby_proxy.pid" ]; then
-		killall -SIGHUP stubby
+if [ -f "$PID_FILE" ]; then
+		kill -HUP $(cat "$PID_FILE")
 		logger -t stubby "Shutdown."
-		rm /var/run/stubby_proxy.pid
+		rm "$PID_FILE"
 
 	else
 		logger -t stubby "Stubby is stoping."

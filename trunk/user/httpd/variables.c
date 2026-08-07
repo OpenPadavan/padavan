@@ -549,6 +549,7 @@
 #if defined(APP_STUBBY)
 			{"stubby_enable", "", NULL, EVM_RESTART_STUBBY},
 			{"stubbyc.stubby.yml", "File", NULL, EVM_RESTART_STUBBY|EVM_BLOCK_UNSAFE},
+			{"stubby_opt", "", NULL, EVM_RESTART_STUBBY},
 #endif
 #if defined(APP_ZAPRET)
 			{"zapret_enable", "", NULL, EVM_RESTART_ZAPRET},

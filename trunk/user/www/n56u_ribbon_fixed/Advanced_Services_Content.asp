@@ -125,7 +125,7 @@ function initial(){
 
 	if(!found_app_stubby()){
 		showhide_div('row_stubby', 0);
-		showhide_div('row_stubby_conf', 0);
+		showhide_div('row_stubby_service', 0);
 	}else{
 		change_stubby_enabled();
 	}
@@ -189,7 +189,7 @@ function applyRule(){
 
 	if(!found_app_stubby()){
 		showhide_div('row_stubby', 0);
-		showhide_div('row_stubby_conf', 0);
+		showhide_div('row_stubby_service', 0);
 	}
 
 	if(!found_app_zapret()){
@@ -401,7 +401,7 @@ function on_doh_select_change(selectObject, i){
 
 function change_stubby_enabled(){
 	var v = document.form.stubby_enable[0].checked;
-	showhide_div('row_stubby_conf', v);
+	showhide_div('row_stubby_service', v);
 	if (!login_safe())
 		v = 0;
 	textarea_stubby_enabled(v);
@@ -909,12 +909,26 @@ function zapret_strategy_change(o, v) {
                                                 </div>
                                             </td>
                                         </tr>
-                                        <tr id="row_stubby_conf" style="display:none">
-                                            <td colspan="2">
-                                                <a href="javascript:spoiler_toggle('stubby.yml')"><span><#CustomConf#> "stubby.yml"</span></a>
-                                                <div id="stubby.yml" style="display:none;">
-                                                    <textarea rows="16" wrap="off" spellcheck="false" maxlength="8192" class="span12" name="stubbyc.stubby.yml" style="resize:none; font-family:'Courier New'; font-size:12px;"><% nvram_dump("stubbyc.stubby.yml",""); %></textarea>
-                                                </div>
+                                        <tr style="" id="row_stubby_service">
+                                            <td colspan="2" style="padding: 0; border: 0;">
+                                                <table height="100%" width="100%" cellpadding="0" cellspacing="0" class="table" style="border: 0px; margin: 0px;">
+                                                    <tbody>
+                                                        <tr>
+                                                            <th width="50%">Stubby options:</th>
+                                                            <td>
+                                                                <input type="text" class="input" size="10" style="width: 210px;" maxlength="55" name="stubby_opt" value="<% nvram_get_x("", "stubby_opt"); %>" onkeypress="return is_string(this,event);"/>
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td colspan="2">
+                                                                <a href="javascript:spoiler_toggle('stubby.yml')"><span><#CustomConf#> "stubby.yml"</span> <i style="scale: 75%;" class="icon-chevron-down"></i></a>
+                                                                <div id="stubby.yml" style="display:none;">
+                                                                    <textarea rows="16" wrap="off" spellcheck="false" maxlength="8192" class="span12" name="stubbyc.stubby.yml" style="resize:none; font-family:'Courier New'; font-size:12px;"><% nvram_dump("stubbyc.stubby.yml",""); %></textarea>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
                                             </td>
                                         </tr>
 

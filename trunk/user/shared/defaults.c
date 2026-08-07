@@ -638,6 +638,7 @@ struct nvram_pair router_defaults[] = {
 #endif
 #if defined (APP_STUBBY)
 	{ "stubby_enable", "0" },
+	{ "stubby_opt", "" },
 #endif
 #if defined (APP_ZAPRET)
 	{ "zapret_enable", "0" },
