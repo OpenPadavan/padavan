@@ -106,20 +106,21 @@ cmm_objs := $(SRC_EMBEDDED_DIR)/common/action.o\
 		$(SRC_EMBEDDED_DIR)/common/misc_app.o
 
 ifeq ($(MULTI_PROFILE_SUPPORT),y)
-	EXTRA_CFLAGS += -DMULTI_PROFILE
-	cmm_objs += $(SRC_EMBEDDED_DIR)/common/multi_profile.o
+EXTRA_CFLAGS += -DMULTI_PROFILE
+cmm_objs += $(SRC_EMBEDDED_DIR)/common/multi_profile.o
 endif
 
 ifeq ($(CONFIG_DEFAULT_5G_PROFILE),y)
-	EXTRA_CFLAGS += -DDEFAULT_5G_PROFILE
+EXTRA_CFLAGS += -DDEFAULT_5G_PROFILE
 endif
 
 ########################################################
 # Coex related files
 ########################################################
 ifeq ($(CONFIG_COEX_SUPPORT),y)
-	EXTRA_CFLAGS += -DCOEX_SUPPORT
-	cmm_objs += $(SRC_EMBEDDED_DIR)/mcu/bt_coex.o
+   EXTRA_CFLAGS += -DCOEX_SUPPORT
+
+    cmm_objs += $(SRC_EMBEDDED_DIR)/mcu/bt_coex.o
 endif
 ########################################################
 # Rate adaptation related files
@@ -353,15 +354,15 @@ endif
 
 # FT
 ifeq ($(CONFIG_DOT11R_FT_SUPPORT),y)
-   EXTRA_CFLAGS += -DDOT11R_FT_SUPPORT
-   dot11_ft_objs += $(SRC_EMBEDDED_DIR)/common/ft.o\
+EXTRA_CFLAGS += -DDOT11R_FT_SUPPORT
+dot11_ft_objs += $(SRC_EMBEDDED_DIR)/common/ft.o\
                     $(SRC_EMBEDDED_DIR)/common/ft_tlv.o\
                     $(SRC_EMBEDDED_DIR)/common/ft_iocl.o\
                     $(SRC_EMBEDDED_DIR)/common/ft_rc.o\
                     $(SRC_EMBEDDED_DIR)/ap/ap_ftkd.o
 ## Preserve R1KH during Radio ON/OFF
 ifeq ($(CONFIG_MBO_SUPPORT),y)
-    EXTRA_CFLAGS += -DFT_R1KH_KEEP
+EXTRA_CFLAGS += -DFT_R1KH_KEEP
 endif
 endif
 
@@ -505,12 +506,14 @@ endif
 
 ifeq ($(CONFIG_MT7615_AP_CARRIER),y)
     EXTRA_CFLAGS += -DCARRIER_DETECTION_SUPPORT
+
     spec_objs += $(SRC_EMBEDDED_DIR)/common/cmm_cs.o
 endif
 
 ifeq ($(CONFIG_MT7615_AP_SMART_CARRIER_SENSE),y)
     EXTRA_CFLAGS += -DSMART_CARRIER_SENSE_SUPPORT
-    spec_objs += $(SRC_EMBEDDED_DIR)/common/scs.o
+
+        spec_objs += $(SRC_EMBEDDED_DIR)/common/scs.o
 endif
 
 ########################################################
@@ -589,7 +592,6 @@ ifeq ($(CONFIG_MT7615_AP_APCLI),y)
 
     ifeq ($(CONFIG_MT7615_AP_MAC_REPEATER),y)
         EXTRA_CFLAGS += -DMAC_REPEATER_SUPPORT
-
         ap_objs += $(SRC_EMBEDDED_DIR)/ap/ap_repeater.o
     endif
 
@@ -608,7 +610,7 @@ ifeq ($(CONFIG_NINTENDO_AP),y)
 endif
 
 ifeq ($(CONFIG_GREENAP_SUPPORT),y)
-    EXTRA_CFLAGS += -DGREENAP_SUPPORT
+   EXTRA_CFLAGS += -DGREENAP_SUPPORT
 
     ap_objs += $(SRC_DIR)/hw_ctrl/greenap.o
 endif
@@ -627,18 +629,6 @@ endif
 
 ifeq ($(CONFIG_SPECTRUM_SUPPORT),y)
     EXTRA_CFLAGS += -DWIFI_SPECTRUM_SUPPORT
-endif
-
-ifeq ($(CONFIG_PRE_CAL_TRX_SET1_SUPPORT),y)
-    EXTRA_CFLAGS += -DPRE_CAL_TRX_SET1_SUPPORT
-endif
-
-ifeq ($(CONFIG_RLM_CAL_CACHE_SUPPORT),y)
-    EXTRA_CFLAGS += -DRLM_CAL_CACHE_SUPPORT
-endif
-
-ifeq ($(CONFIG_PRE_CAL_TRX_SET2_SUPPORT),y)
-    EXTRA_CFLAGS += -DPRE_CAL_TRX_SET2_SUPPORT
 endif
 
 ifeq ($(CONFIG_CAL_BIN_FILE_SUPPORT),y)
@@ -693,7 +683,7 @@ ifeq ($(CONFIG_AIR_MONITOR),y)
 endif
 
 ifeq ($(CONFIG_EASY_SETUP_SUPPORT),y)
-    $(DRV_NAME)-objs += $(SRC_EMBEDDED_DIR)/easy_setup/ez_cmm.o
+$(DRV_NAME)-objs += $(SRC_EMBEDDED_DIR)/easy_setup/ez_cmm.o
 endif
 
 ifeq ($(CONFIG_MT7615_AP_MWDS),y)
@@ -780,7 +770,7 @@ EXTRA_CFLAGS += -DENHANCED_STAT_DISPLAY
 EXTRA_CFLAGS += -DCONFIG_FWOWN_SUPPORT
 EXTRA_CFLAGS += -DNEWSEC
 ifeq ($(CONFIG_RT_SINGLE_SKU),y)
-    EXTRA_CFLAGS += -DSINGLE_SKU_V2
+EXTRA_CFLAGS += -DSINGLE_SKU_V2
 endif
 EXTRA_CFLAGS += -DTX_POWER_CONTROL_SUPPORT
 EXTRA_CFLAGS += -DTHERMAL_PROTECT_SUPPORT
@@ -793,16 +783,29 @@ EXTRA_CFLAGS += -DRATE_ADAPT_AGBS_SUPPORT
 EXTRA_CFLAGS += -DRACTRL_FW_OFFLOAD_SUPPORT
 EXTRA_CFLAGS += -DCONFIG_TX_DELAY
 EXTRA_CFLAGS += -DRELEASE_EXCLUDE
+ifeq ($(CONFIG_PRE_CAL_TRX_SET1_SUPPORT),y)
+EXTRA_CFLAGS += -DPRE_CAL_TRX_SET1_SUPPORT
+endif
+ifeq ($(CONFIG_RLM_CAL_CACHE_SUPPORT),y)
+EXTRA_CFLAGS += -DRLM_CAL_CACHE_SUPPORT
+endif
+ifeq ($(CONFIG_PRE_CAL_TRX_SET2_SUPPORT),y)
+EXTRA_CFLAGS += -DPRE_CAL_TRX_SET2_SUPPORT
+endif
 
 ifeq ($(CONFIG_CUSTOMER_VENDOR_IE_SUPPORT),y)
     EXTRA_CFLAGS += -DCUSTOMER_VENDOR_IE_SUPPORT
 endif
 ifeq ($(CONFIG_G_BAND_256QAM_SUPPORT),y)
-    EXTRA_CFLAGS += -DG_BAND_256QAM
+EXTRA_CFLAGS += -DG_BAND_256QAM
 endif
 EXTRA_CFLAGS += -Wframe-larger-than=4096
-EXTRA_CFLAGS += -DHDR_TRANS_TX_SUPPORT -DCUT_THROUGH_FULL_OFFLOAD
-EXTRA_CFLAGS += -DHDR_TRANS_RX_SUPPORT
+#ifeq ($(CONFIG_HDR_TRANS_TX_SUPPORT),y)
+	EXTRA_CFLAGS += -DHDR_TRANS_TX_SUPPORT -DCUT_THROUGH_FULL_OFFLOAD
+#endif
+#ifeq ($(CONFIG_HDR_TRANS_RX_SUPPORT),y)
+	EXTRA_CFLAGS += -DHDR_TRANS_RX_SUPPORT
+#endif
 
 #ifeq ($(CONFIG_RATE_ADAPT_AGBS_SUPPORT),y)
 #	EXTRA_CFLAGS += -DRACTRL_FW_OFFLOAD_SUPPORT
@@ -911,7 +914,7 @@ endif
 #  CFLAGS
 ##################
 EXTRA_CFLAGS += -DAGGREGATION_SUPPORT -DPIGGYBACK_SUPPORT -DWMM_SUPPORT  -DLINUX \
-              -Wstrict-prototypes -Wno-trigraphs -Wall -Wno-unused-but-set-variable
+              -Wstrict-prototypes -Wno-trigraphs -Wall -Wno-unused-variable
 
 EXTRA_CFLAGS += -DOLDSEC
 
@@ -990,9 +993,9 @@ EXTRA_CFLAGS += -DCONFIG_WIFI_PKT_FWD
 EXTRA_CFLAGS += -DMTFWD
 #endif
 
-
+ifeq ($(CONFIG_ROAMING_ENHANCE_SUPPORT),y)
 EXTRA_CFLAGS += -DROAMING_ENHANCE_SUPPORT
-
+endif
 
 EXTRA_CFLAGS += -DIP_ASSEMBLY
 EXTRA_CFLAGS += -DOUI_CHECK_SUPPORT
