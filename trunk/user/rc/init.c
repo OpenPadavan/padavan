@@ -472,7 +472,7 @@ init_main_loop(void)
 {
 	pid_t shell_pid = 0;
 
-	umask(0000);
+	umask(022);
 
 	/* Basic initialization */
 	init_time();

@@ -111,6 +111,24 @@ rfctime(const time_t *timep)
 	return s;
 }
 
+static int
+sanitize_cert_name(char *out, size_t outlen, const char *in)
+{
+	size_t i, j = 0;
+
+	for (i = 0; in[i] && j < outlen - 1; i++) {
+		unsigned char c = in[i];
+		if (isalnum(c) || c == '@' || c == '.' || c == '_' || c == '-')
+			out[j++] = c;
+		else if (c == ' ')
+			out[j++] = c;
+		else
+			return 0;
+	}
+	out[j] = '\0';
+	return j > 0;
+}
+
 /******************************************************************************/
 /*
  *	Redirect the user to another webs page
@@ -482,7 +500,7 @@ ej_nvram_match_x(int eid, webs_t wp, int argc, char **argv)
 
 	if (nvram_match(name, match))
 	{
-		return websWrite(wp, output);
+		return websWrite(wp, "%s", output);
 	}
 
 	return 0;
@@ -501,7 +519,7 @@ ej_nvram_double_match_x(int eid, webs_t wp, int argc, char **argv)
 
 	if (nvram_match(name, match) && nvram_match(name2, match2))
 	{
-		return websWrite(wp, output);
+		return websWrite(wp, "%s", output);
 	}
 
 	return 0;
@@ -526,11 +544,11 @@ ej_nvram_match_both_x(int eid, webs_t wp, int argc, char **argv)
 
 	if (nvram_match(name, match))
 	{
-		return websWrite(wp, output);
+		return websWrite(wp, "%s", output);
 	}
 	else
 	{
-		return websWrite(wp, output_not);
+		return websWrite(wp, "%s", output_not);
 	}
 }
 
@@ -616,7 +634,7 @@ ej_nvram_match_list_x(int eid, webs_t wp, int argc, char **argv)
 	}
 
 	if (nvram_match_list_x(name, match, which))
-		return websWrite(wp, output);
+		return websWrite(wp, "%s", output);
 
 	return 0;
 }
@@ -647,7 +665,7 @@ ej_uptime(int eid, webs_t wp, int argc, char **argv)
 	time_t tm;
 
 	time(&tm);
-	return websWrite(wp, rfctime(&tm));
+	return websWrite(wp, "%s", rfctime(&tm));
 }
 
 static int
@@ -2775,7 +2793,29 @@ static int ej_get_parameter(int eid, webs_t wp, int argc, char **argv) {
 		return -1;
 
 	char *value = websGetVar(wp, argv[0], "");
-	websWrite(wp, "%s", value);
+	char *p;
+	for (p = value; *p; p++) {
+		switch (*p) {
+		case '\'':
+			websWrite(wp, "&#39;");
+			break;
+		case '"':
+			websWrite(wp, "&quot;");
+			break;
+		case '<':
+			websWrite(wp, "&lt;");
+			break;
+		case '>':
+			websWrite(wp, "&gt;");
+			break;
+		case '\\':
+			websWrite(wp, "&#92;");
+			break;
+		default:
+			websWrite(wp, "%c", *p);
+			break;
+		}
+	}
 	return ret;
 }
 
@@ -3314,6 +3354,17 @@ apply_cgi(const char *url, webs_t wp)
 			snprintf(command, sizeof(command), "%s genpsk", wg_binary);
 		} else
 		if (strcmp(action, "pubkey") == 0) {
+			const char *q;
+			for (q = privkey; *q; q++) {
+				if (!(isalnum((unsigned char)*q) || *q == '+' || *q == '/' || *q == '=')) {
+					websWrite(wp, "{\"error\":\"invalid key\"}");
+					return 0;
+				}
+			}
+			if (q - privkey == 0 || q - privkey > 128) {
+				websWrite(wp, "{\"error\":\"invalid key\"}");
+				return 0;
+			}
 			snprintf(command, sizeof(command), "echo '%s' | %s pubkey", privkey, wg_binary);
 		} else
 			return 0;
@@ -3324,7 +3375,7 @@ apply_cgi(const char *url, webs_t wp)
 		fgets(result, sizeof(result), fp);
 		pclose(fp);
 
-		if (*result) websWrite(wp, result);
+		if (*result) websWrite(wp, "%s", result);
 		return 0;
 	}
 #endif
@@ -3332,8 +3383,9 @@ apply_cgi(const char *url, webs_t wp)
 	else if (!strcmp(value, " ExportWGConf "))
 	{
 		char *common_name = websGetVar(wp, "common_name", "");
-		if (get_login_safe() && strlen(common_name) > 0) {
-			doSystem("/usr/bin/wgs.sh export '%s'", common_name);
+		char safe_name[64];
+		if (get_login_safe() && sanitize_cert_name(safe_name, sizeof(safe_name), common_name)) {
+			doSystem("/usr/bin/wgs.sh export '%s'", safe_name);
 			do_file("/tmp/client-wg.conf", wp);
 			unlink("/tmp/client-wg.conf");
 		}
@@ -3398,10 +3450,16 @@ apply_cgi(const char *url, webs_t wp)
 		char *common_name = websGetVar(wp, "common_name", "");
 		char *rsa_bits = websGetVar(wp, "rsa_bits", "1024");
 		int days_valid = atoi(websGetVar(wp, "days_valid", "365"));
+		char safe_name[64];
+		int rsa = atoi(rsa_bits);
 		if (strlen(common_name) < 1)
 			common_name = "client@ovpn";
+		if (!sanitize_cert_name(safe_name, sizeof(safe_name), common_name))
+			safe_name[0] = '\0';
+		if (rsa != 512 && rsa != 1024 && rsa != 2048 && rsa != 4096)
+			rsa = 1024;
 		if (get_login_safe())
-			sys_result = doSystem("/sbin/ovpn_export_client '%s' %s %d", common_name, rsa_bits, days_valid);
+			sys_result = doSystem("/sbin/ovpn_export_client '%s' %d %d", safe_name, rsa, days_valid);
 #endif
 		websWrite(wp, "{\"sys_result\": %d}", sys_result);
 		return 0;
@@ -3413,10 +3471,16 @@ apply_cgi(const char *url, webs_t wp)
 		char *common_name = websGetVar(wp, "common_name", "");
 		char *rsa_bits = websGetVar(wp, "rsa_bits", "1024");
 		int days_valid = atoi(websGetVar(wp, "days_valid", "365"));
+		char safe_name[64];
+		int rsa = atoi(rsa_bits);
 		if (strlen(common_name) < 1)
 			common_name = "OpenVPN Server";
+		if (!sanitize_cert_name(safe_name, sizeof(safe_name), common_name))
+			safe_name[0] = '\0';
+		if (rsa != 512 && rsa != 1024 && rsa != 2048 && rsa != 4096)
+			rsa = 1024;
 		if (get_login_safe())
-			sys_result = doSystem("/usr/bin/openvpn-cert.sh %s -n '%s' -b %s -d %d", "server", common_name, rsa_bits, days_valid);
+			sys_result = doSystem("/usr/bin/openvpn-cert.sh %s -n '%s' -b %d -d %d", "server", safe_name, rsa, days_valid);
 #endif
 		websWrite(wp, "{\"sys_result\": %d}", sys_result);
 		return 0;
@@ -3428,10 +3492,16 @@ apply_cgi(const char *url, webs_t wp)
 		char *common_name = websGetVar(wp, "common_name", "");
 		char *rsa_bits = websGetVar(wp, "rsa_bits", "1024");
 		int days_valid = atoi(websGetVar(wp, "days_valid", "365"));
+		char safe_name[64];
+		int rsa = atoi(rsa_bits);
 		if (strlen(common_name) < 1)
 			common_name = nvram_safe_get("lan_ipaddr_t");
+		if (!sanitize_cert_name(safe_name, sizeof(safe_name), common_name))
+			safe_name[0] = '\0';
+		if (rsa != 512 && rsa != 1024 && rsa != 2048 && rsa != 4096)
+			rsa = 1024;
 		if (get_login_safe())
-			sys_result = doSystem("/usr/bin/https-cert.sh -n '%s' -b %s -d %d", common_name, rsa_bits, days_valid);
+			sys_result = doSystem("/usr/bin/https-cert.sh -n '%s' -b %d -d %d", safe_name, rsa, days_valid);
 #endif
 		websWrite(wp, "{\"sys_result\": %d}", sys_result);
 		return 0;
@@ -4151,12 +4221,12 @@ ej_backup_nvram(int eid, webs_t wp, int argc, char **argv)
 			continue;
 		v = nvram_safe_get(k);
 		websWrite(wp, "\t%s: '", k);
-		websWrite(wp, v);
+		websWrite(wp, "%s", v);
 		websWrite(wp, "',\n");
 	}
 	free(list);
 	websWrite(wp, "\thttp_id: '");
-	websWrite(wp, nvram_safe_get("http_id"));
+	websWrite(wp, "%s", nvram_safe_get("http_id"));
 	websWrite(wp, "'};\n");
 
 	return 0;

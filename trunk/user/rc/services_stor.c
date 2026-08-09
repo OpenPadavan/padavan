@@ -129,11 +129,11 @@ write_vsftpd_conf(void)
 			fprintf(fp, "anon_upload_enable=%s\n", "YES");
 			fprintf(fp, "anon_mkdir_write_enable=%s\n", "YES");
 			fprintf(fp, "anon_other_write_enable=%s\n", "YES");
-			fprintf(fp, "anon_umask=%s\n", "000");
+			fprintf(fp, "anon_umask=%s\n", "022");
 		}
 	} else {
 		fprintf(fp, "local_enable=%s\n", "YES");
-		fprintf(fp, "local_umask=%s\n", "000");
+		fprintf(fp, "local_umask=%s\n", "022");
 		fprintf(fp, "anonymous_enable=%s\n", (i_ftp_mode == 2) ? "NO" : "YES");
 	}
 
@@ -588,7 +588,7 @@ write_nfsd_exports(void)
 	char line[512], devname[32], mpname[256], fstype[32], fsmode[4], acl_lan[32], acl_vpn[32];
 	const char *exports_link = "/etc/storage/exports";
 	const char *exports_file = "/etc/exports";
-	const char *exports_rule = "async,insecure,no_root_squash,no_subtree_check";
+	const char *exports_rule = "async,insecure,root_squash,no_subtree_check";
 	char *nfsmm, *acl_addr, *acl_mask;
 #if defined (USE_IPV6)
 	int ipv6_type;
