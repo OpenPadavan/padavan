@@ -4,6 +4,7 @@ trunk/images/
 trunk/stage/
 trunk/.config
 trunk/user/openvpn/openvpn-2.6.16.old/
+trunk/user/dropbear/dropbear-2025.88.old/
 toolchain/out/
 toolchain/dl/
 
