@@ -35,6 +35,7 @@
 #define PKTLA_DUMP(_lvl, _len, _byte_array)({			\
 		INT _cnt = 0;										\
 		UINT32 *_arr = (UINT32 *)_byte_array;				\
+		(void)_arr; /* suppress unused when log disabled */ \
 		for (_cnt = 0; _cnt < _len; _cnt++)						\
 			MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, _lvl, ("DWORD%d:%08x\n", _cnt, _arr[_cnt]));	\
 		_len;												\

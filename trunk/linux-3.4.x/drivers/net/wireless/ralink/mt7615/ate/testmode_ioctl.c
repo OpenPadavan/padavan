@@ -6058,7 +6058,6 @@ static INT32 hqa_set_channel_ext(PRTMP_ADAPTER pAd,
 	struct _ATE_CTRL *ate_ctrl = &(pAd->ATECtrl);
 	struct _ATE_OPERATION *ate_ops = ate_ctrl->ATEOp;
 	UCHAR *data = cmd_frame->Data;
-	UINT32 pri_ch = 0;
 	UINT32 band_idx = 0;
 	UINT32 bw = 0;
 	UINT32 per_pkt_bw = 0;

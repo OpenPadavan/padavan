@@ -468,14 +468,15 @@ VOID LoopBack_Rx(RTMP_ADAPTER *pAd, UINT32 pktlen, UINT8 *pData)
 	if (!pAd->LbCtrl.LoopBackRunning && !pAd->LbCtrl.LoopBackWaitRx)
 		return;
 
-	{
-		UINT32 LPLength = 0;
-		INT32 TotalLength = (INT32)pktlen;
-		UINT8  *ptr = pData;
-		EVENT_RXD EvnRxD;
+{
+	UINT32 LPLength = 0;
+	INT32 TotalLength = (INT32)pktlen;
+	UINT8  *ptr = pData;
+	EVENT_RXD EvnRxD;
 
-		/* FwCMDRspTxD_STRUC FwCMDRspTxD; */
-		if (pAd->LbCtrl.DebugMode) {
+	/* FwCMDRspTxD_STRUC FwCMDRspTxD; */
+	(void)TotalLength; /* suppress unused when debug disabled */
+	if (pAd->LbCtrl.DebugMode) {
 			MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s, Debug Mode, Total Len:%d\n", __func__, TotalLength));
 			LPLength = pktlen;
 		} else {
