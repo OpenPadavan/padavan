@@ -4,6 +4,7 @@ trunk/images/
 trunk/stage/
 trunk/.config
 toolchain/out/
+toolchain/dl/
 
 # Editor swap / backup files
 *.swp

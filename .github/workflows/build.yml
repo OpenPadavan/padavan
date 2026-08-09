@@ -62,12 +62,30 @@ jobs:
 
       - name: Install dependencies
         run: |
+          echo "[$(date -u '+%H:%M:%S')] apt-get update"
           sudo apt-get update
+          echo "[$(date -u '+%H:%M:%S')] installing build dependencies"
           sudo apt-get install -y autoconf autoconf-archive automake autopoint bison build-essential ca-certificates cmake cpio curl dos2unix doxygen fakeroot flex gawk gettext git gperf help2man kmod libarchive-tools libblkid-dev libc-ares-dev libcurl4-openssl-dev libdevmapper-dev libev-dev libevent-dev libexif-dev libflac-dev libgmp3-dev libid3tag0-dev libidn2-dev libjpeg-dev libkeyutils-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libogg-dev libsqlite3-dev libssl-dev libsystemd-dev libtool libtool-bin libudev-dev libunbound-dev libvorbis-dev libxml2-dev locales pkg-config ppp-dev python3 python3-docutils texinfo unzip uuid uuid-dev wget xxd zlib1g-dev
+          echo "[$(date -u '+%H:%M:%S')] dependencies installed"
+
+      - name: Cache toolchain
+        id: cache-toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            toolchain/out
+            toolchain/dl
+          key: toolchain-${{ runner.os }}-${{ hashFiles('toolchain/**') }}
+          restore-keys: |
+            toolchain-${{ runner.os }}-
 
       - name: Build toolchain
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
         working-directory: toolchain
-        run: ./build_toolchain.sh
+        run: |
+          echo "[$(date -u '+%H:%M:%S')] building cross toolchain (no cache hit)"
+          ./build_toolchain.sh
+          echo "[$(date -u '+%H:%M:%S')] toolchain build done"
 
       - name: Select board configuration
         working-directory: trunk
@@ -80,11 +98,67 @@ jobs:
 
       - name: Build firmware
         working-directory: trunk
-        run: ./build_firmware.sh
+        run: |
+          echo "[$(date -u '+%H:%M:%S')] firmware build started"
+          ./build_firmware.sh
+          echo "[$(date -u '+%H:%M:%S')] firmware build done"
+
+      - name: Verify firmware
+        run: |
+          set -euo pipefail
+          images=()
+          for img in trunk/images/*; do
+            [ -e "$img" ] || continue
+            images+=("$img")
+            size=$(stat -c %s "$img")
+            echo "[$(date -u '+%H:%M:%S')] $img : $size bytes ($(file -b "$img"))"
+            if [ "$size" -lt 1000000 ]; then
+              echo "::error file=$img::firmware image suspiciously small (${size} bytes)"
+              exit 1
+            fi
+          done
+          if [ "${#images[@]}" -eq 0 ]; then
+            echo "::error::no firmware images produced"
+            exit 1
+          fi
+          echo "## Firmware build summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for img in "${images[@]}"; do
+            echo "- $(basename "$img") \`$(sha256sum "$img" | cut -c1-16)…\`" >> $GITHUB_STEP_SUMMARY
+          done
 
       - name: Upload firmware images
         uses: actions/upload-artifact@v4
         with:
           name: firmware-${{ env.SLUG }}
           path: trunk/images/*
-          if-no-files-found: ignore
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Notify failure (Discord)
+        if: failure()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "DISCORD_WEBHOOK not set, skipping notification"
+            exit 0
+          fi
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          msg="**Build failed** for \`$BOARD\` on \`${{ github.ref_name }}\`\nCommit: \`${{ github.sha }}\`\nRun: $run_url"
+          curl -s -X POST -H "Content-Type: application/json" \
+            -d "{\"content\": \"$msg\"}" "$DISCORD_WEBHOOK"
+
+      - name: Notify failure (Slack)
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL not set, skipping notification"
+            exit 0
+          fi
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          msg="Build failed for \`$BOARD\` on \`${{ github.ref_name }}\` — <$run_url>"
+          curl -s -X POST -H 'Content-type: application/json' \
+            -d "{\"text\":\"$msg\"}" "$SLACK_WEBHOOK_URL"
