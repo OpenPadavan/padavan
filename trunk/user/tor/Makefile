@@ -1,6 +1,6 @@
-SRC_NAME=tor-0.4.8.17
-#SRC_NAME=tor-tor-0.4.8.17
-SRC_URL=https://gitlab.torproject.org/tpo/core/tor/-/archive/tor-0.4.8.17/$(SRC_NAME).tar.gz
+SRC_NAME=tor-0.4.9.9
+#SRC_NAME=tor-tor-0.4.9.9
+SRC_URL=https://dist.torproject.org/$(SRC_NAME).tar.gz
 
 CFLAGS +=$(COPT) -ffunction-sections -fdata-sections -fvisibility=hidden
 LDFLAGS += -Wl,--gc-sections
@@ -17,6 +17,7 @@ download_test:
 extract_test:
 	( if [ ! -d $(SRC_NAME) ]; then \
 		tar xzf $(SRC_NAME).tar.gz; \
+		cat patches/*.patch | patch -d $(SRC_NAME) -r - -N -p1; \
 	fi )
 
 config_test:
