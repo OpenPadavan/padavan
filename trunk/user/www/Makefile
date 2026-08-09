@@ -57,6 +57,10 @@ ifeq ($(CONFIG_FIRMWARE_INCLUDE_LANG_ES),y)
 	echo "LANG_ES=Español" >> $(ROMFS_DIR)/www/EN.header
 	cp dict/ES.dict $(ROMFS_DIR)/www
 endif
+ifeq ($(CONFIG_FIRMWARE_INCLUDE_LANG_PT),y)
+	echo "LANG_PT=Português" >> $(ROMFS_DIR)/www/EN.header
+	cp dict/PT.dict $(ROMFS_DIR)/www
+endif
 ifeq ($(CONFIG_FIRMWARE_INCLUDE_LANG_FI),y)
 	echo "LANG_FI=Finsk" >> $(ROMFS_DIR)/www/EN.header
 	cp dict/FI.dict $(ROMFS_DIR)/www

@@ -136,6 +136,8 @@ const struct language_table language_tables[] = {
 	{"uk", "UK"},
 	{"br", "BR"},
 	{"pt-BR", "BR"},
+	{"pt-pt", "PT"},
+	{"pt", "PT"},
 	{"zh-hk", "CN"},
 	{"zh-cn", "CN"},
 	{"cs-cz", "CZ"},
