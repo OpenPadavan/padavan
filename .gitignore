@@ -15,6 +15,12 @@ toolchain/dl/
 *.orig
 *.rej
 
+# miniupnpd build artifacts
+trunk/user/miniupnpd/miniupnpd-2.3.10/.configure.cache
+trunk/user/miniupnpd/miniupnpd-2.3.10/Makefile
+trunk/user/miniupnpd/miniupnpd-2.3.10/config.h
+trunk/user/miniupnpd/miniupnpd-2.3.10/config.mk
+
 # OS files
 .DS_Store
 Thumbs.db
