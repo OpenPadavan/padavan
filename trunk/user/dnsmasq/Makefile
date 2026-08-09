@@ -1,10 +1,12 @@
-SRC_NAME=dnsmasq-2.92rel2
+SRC_NAME=dnsmasq-2.93
 SRC_URL=https://thekelleys.org.uk/dnsmasq/$(SRC_NAME).tar.xz
 THISDIR = $(shell pwd)
 
 COPTS := -DHAVE_BROKEN_RTC -DNO_INOTIFY -DNO_AUTH -DNO_LOOP -DNO_DUMPFILE
-ifndef CONFIG_IPV6
-COPTS += -DNO_IPV6
+ifdef CONFIG_IPV6
+COPTS += -DCONFIG_IPV6
+else
+COPTS += -DNO_DHCP6
 endif
 ifndef CONFIG_USB_SUPPORT
 COPTS += -DNO_TFTP
@@ -12,6 +14,9 @@ endif
 ifneq ($(CONFIG_FIRMWARE_INCLUDE_IPSET),y)
 COPTS += -DNO_IPSET
 endif
+
+CFLAGS += -ffunction-sections -fdata-sections
+LDFLAGS += -Wl,--gc-sections
 
 #all: download_test extract_test
 all:
