@@ -68,6 +68,13 @@ jobs:
           sudo apt-get install -y autoconf autoconf-archive automake autopoint bison build-essential ca-certificates cmake cpio curl dos2unix doxygen fakeroot flex gawk gettext git gperf help2man kmod libarchive-tools libblkid-dev libc-ares-dev libcurl4-openssl-dev libdevmapper-dev libev-dev libevent-dev libexif-dev libflac-dev libgmp3-dev libid3tag0-dev libidn2-dev libjpeg-dev libkeyutils-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libogg-dev libsqlite3-dev libssl-dev libsystemd-dev libtool libtool-bin libudev-dev libunbound-dev libvorbis-dev libxml2-dev locales pkg-config ppp-dev python3 python3-docutils texinfo unzip uuid uuid-dev wget xxd zlib1g-dev
           echo "[$(date -u '+%H:%M:%S')] dependencies installed"
 
+      - name: Compute toolchain cache key
+        id: toolchain-key
+        run: |
+          SHA=$(find toolchain -type f -not -path 'toolchain/dl/*' -not -path 'toolchain/out/*' -print0 \
+                | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-40)
+          echo "key=toolchain-${{ runner.os }}-$SHA" >> "$GITHUB_OUTPUT"
+
       - name: Cache toolchain
         id: cache-toolchain
         uses: actions/cache@v4
@@ -75,7 +82,7 @@ jobs:
           path: |
             toolchain/out
             toolchain/dl
-          key: toolchain-${{ runner.os }}-${{ hashFiles('toolchain/**') }}
+          key: ${{ steps.toolchain-key.outputs.key }}
           restore-keys: |
             toolchain-${{ runner.os }}-
 
