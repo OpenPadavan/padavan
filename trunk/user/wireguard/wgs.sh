@@ -2,6 +2,10 @@
 
 ###
 
+MODULE="wireguard"
+[ -d "/lib/modules/3.4.113/kernel/net/amneziawg" ] \
+    && MODULE="amneziawg"
+
 WG="wg"
 IF_NAME="wg1"
 IF_ADDR="$(nvram get vpns_vnet | sed 's/\.0$/.1/')"
@@ -35,7 +39,7 @@ log()
 {
     [ -n "$*" ] || return
     echo "$@"
-    logger -t wireguard "$@"
+    logger -t $MODULE "$@"
 }
 
 error()
@@ -131,7 +135,7 @@ EOF
 
 wg_prepare()
 {
-    modprobe -q wireguard >/dev/null 2>&1
+    modprobe -q $MODULE >/dev/null 2>&1
 }
 
 wg_stop()
@@ -143,12 +147,10 @@ wg_stop()
 
 wg_start()
 {
-    [ "$(nvram get vpns_type)" == "3" -a "$(nvram get vpns_enable)" == "1" ] || die "disabled"
-
     is_started && die "already started"
     wg_prepare
 
-    ip link add dev $IF_NAME type wireguard || error "cannot create $IF_NAME"
+    ip link add dev $IF_NAME type $MODULE || error "cannot create $IF_NAME"
     ip link set dev $IF_NAME mtu $IF_MTU
     ip addr add ${IF_ADDR}/24 dev $IF_NAME
 
@@ -303,7 +305,7 @@ wg_export()
 [Interface]
 PrivateKey = $(nvram get vpns_pass_x$i)
 Address = $(nvram get vpns_vnet | sed 's/\.0$/./')$(nvram get vpns_addr_x$i)/24
-DNS = 1.1.1.1,8.8.8.8,9.9.9.9,77.88.8.8
+DNS = $(nvram get lan_ipaddr)
 
 [Peer]
 PublicKey = $(nvram get vpns_wg_public)
@@ -351,10 +353,5 @@ case "$1" in
         exit 1
     ;;
 esac
-
-# IF_NAME
-# IF_ADDR
-# PORT
-# WAN_ADDR
 
 [ -s "$POST_SCRIPT" -a -x "$POST_SCRIPT" ] && . "$POST_SCRIPT"
