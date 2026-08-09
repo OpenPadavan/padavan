@@ -1,6 +1,18 @@
-diff -urN a/kernel/net/Kbuild b/kernel/net/Kbuild
---- a/kernel/net/Kbuild	2020-06-26 00:30:16.675629900 +0300
-+++ b/kernel/net/Kbuild	2020-06-26 00:29:37.804497500 +0300
+diff -urN ipset-7.24-pristine/kernel/include/linux/netfilter/ipset/ip_set_compat.h.in ipset-7.24-final/kernel/include/linux/netfilter/ipset/ip_set_compat.h.in
+--- ipset-7.24-pristine/kernel/include/linux/netfilter/ipset/ip_set_compat.h.in	2025-05-17 14:50:19.000000000 +0100
++++ ipset-7.24-final/kernel/include/linux/netfilter/ipset/ip_set_compat.h.in	2026-08-09 21:41:43.383035889 +0100
+@@ -53,7 +53,7 @@
+ #@HAVE_TIMER_SETUP@ HAVE_TIMER_SETUP
+ #@HAVE_TIMER_SHUTDOWN_SYNC@ HAVE_TIMER_SHUTDOWN_SYNC
+ #@HAVE_STRSCPY@ HAVE_STRSCPY
+-#@HAVE_STRSCPY_PAD@ HAVE_STRSCPY_PAD
++//#@HAVE_STRSCPY_PAD@ HAVE_STRSCPY_PAD
+ #@HAVE_SYNCHRONIZE_RCU_BH@ HAVE_SYNCHRONIZE_RCU_BH
+ #@HAVE_LOCKDEP_NFNL_IS_HELD@ HAVE_LOCKDEP_NFNL_IS_HELD
+ #@HAVE_COND_RESCHED_RCU@ HAVE_COND_RESCHED_RCU
+diff -urN ipset-7.24-pristine/kernel/net/Kbuild ipset-7.24-final/kernel/net/Kbuild
+--- ipset-7.24-pristine/kernel/net/Kbuild	2025-05-17 14:50:19.000000000 +0100
++++ ipset-7.24-final/kernel/net/Kbuild	2026-08-09 21:41:43.376474294 +0100
 @@ -2,7 +2,6 @@
  EXTRA_CFLAGS := -DCONFIG_IP_SET_MAX=$(IP_SET_MAX)
  
@@ -9,11 +21,61 @@ diff -urN a/kernel/net/Kbuild b/kernel/net/Kbuild
  
  # It's for me...
  incdirs := $(M) $(KDIR)/include/linux/netfilter $(KDIR)/include/linux/netfilter/ipset
-diff -urN a/kernel/net/netfilter/ipset/ip_set_hash_gen.h b/kernel/net/netfilter/ipset/ip_set_hash_gen.h
---- a/kernel/net/netfilter/ipset/ip_set_hash_gen.h	2020-06-26 00:30:16.769384200 +0300
-+++ b/kernel/net/netfilter/ipset/ip_set_hash_gen.h	2020-06-26 00:10:53.867232900 +0300
-@@ -8,21 +8,17 @@
- #include <linux/rcupdate.h>
+diff -urN ipset-7.24-pristine/kernel/net/netfilter/Kbuild ipset-7.24-final/kernel/net/netfilter/Kbuild
+--- ipset-7.24-pristine/kernel/net/netfilter/Kbuild	2025-05-17 14:50:19.000000000 +0100
++++ ipset-7.24-final/kernel/net/netfilter/Kbuild	2026-08-09 21:41:43.390641924 +0100
+@@ -1,5 +1,5 @@
+ NOSTDINC_FLAGS += -I$(KDIR)/include
+-EXTRA_CFLAGS := -DCONFIG_IP_SET_MAX=$(IP_SET_MAX)
++EXTRA_CFLAGS := -DCONFIG_IP_SET_MAX=$(IP_SET_MAX) -Wno-strict-prototypes
+ 
+ obj-m += xt_set.o
+ obj-m += ipset/
+diff -urN ipset-7.24-pristine/kernel/net/netfilter/ipset/Kbuild ipset-7.24-final/kernel/net/netfilter/ipset/Kbuild
+--- ipset-7.24-pristine/kernel/net/netfilter/ipset/Kbuild	2025-05-17 14:50:19.000000000 +0100
++++ ipset-7.24-final/kernel/net/netfilter/ipset/Kbuild	2026-08-09 21:41:43.389682676 +0100
+@@ -1,5 +1,5 @@
+ NOSTDINC_FLAGS += -I$(KDIR)/include
+-EXTRA_CFLAGS := -DIP_SET_MAX=$(IP_SET_MAX)
++EXTRA_CFLAGS := -DIP_SET_MAX=$(IP_SET_MAX) -Wno-strict-prototypes
+ 
+ ip_set-y := ip_set_core.o ip_set_getport.o pfxlen.o
+ obj-m += ip_set.o
+diff -urN ipset-7.24-pristine/kernel/net/netfilter/ipset/ip_set_core.c ipset-7.24-final/kernel/net/netfilter/ipset/ip_set_core.c
+--- ipset-7.24-pristine/kernel/net/netfilter/ipset/ip_set_core.c	2025-05-17 14:50:19.000000000 +0100
++++ ipset-7.24-final/kernel/net/netfilter/ipset/ip_set_core.c	2026-08-09 21:41:43.379616715 +0100
+@@ -2498,17 +2498,11 @@
+ }
+ 
+ static void __net_exit
+-ip_set_net_pre_exit(struct net *net)
++ip_set_net_exit(struct net *net)
+ {
+ 	struct ip_set_net *inst = ip_set_pernet(net);
+ 
+ 	inst->is_deleted = true; /* flag for ip_set_nfnl_put */
+-}
+-
+-static void __net_exit
+-ip_set_net_exit(struct net *net)
+-{
+-	struct ip_set_net *inst = ip_set_pernet(net);
+ 
+ 	_destroy_all_sets(inst);
+ 	kvfree(rcu_dereference_protected(inst->ip_set_list, 1));
+@@ -2519,7 +2513,6 @@
+ 
+ static struct pernet_operations ip_set_net_ops = {
+ 	.init	= ip_set_net_init,
+-	.pre_exit = ip_set_net_pre_exit,
+ 	.exit   = ip_set_net_exit,
+ #ifdef HAVE_NET_OPS_ID
+ 	.id	= &ip_set_net_id,
+diff -urN ipset-7.24-pristine/kernel/net/netfilter/ipset/ip_set_hash_gen.h ipset-7.24-final/kernel/net/netfilter/ipset/ip_set_hash_gen.h
+--- ipset-7.24-pristine/kernel/net/netfilter/ipset/ip_set_hash_gen.h	2025-05-17 14:50:19.000000000 +0100
++++ ipset-7.24-final/kernel/net/netfilter/ipset/ip_set_hash_gen.h	2026-08-09 21:41:43.377102165 +0100
+@@ -11,21 +11,17 @@
+ #endif
  #include <linux/jhash.h>
  #include <linux/types.h>
 -#include <linux/netfilter/nfnetlink.h>
