@@ -14,6 +14,8 @@ on:
           - xiaomi/mi-r3pro
           - unielec/u7621-06
           - tplink/tl_wr840n-v6
+          - asus/RT-AC65P
+          - asus/RT-AC85P
 
 env:
   IMAGE_NAME: padavan-build
