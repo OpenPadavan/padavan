@@ -134,31 +134,3 @@ jobs:
           path: trunk/images/*
           retention-days: 30
           if-no-files-found: error
-
-      - name: Notify failure (Discord)
-        if: failure()
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        run: |
-          if [ -z "$DISCORD_WEBHOOK" ]; then
-            echo "DISCORD_WEBHOOK not set, skipping notification"
-            exit 0
-          fi
-          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          msg="**Build failed** for \`$BOARD\` on \`${{ github.ref_name }}\`\nCommit: \`${{ github.sha }}\`\nRun: $run_url"
-          curl -s -X POST -H "Content-Type: application/json" \
-            -d "{\"content\": \"$msg\"}" "$DISCORD_WEBHOOK"
-
-      - name: Notify failure (Slack)
-        if: failure()
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          if [ -z "$SLACK_WEBHOOK_URL" ]; then
-            echo "SLACK_WEBHOOK_URL not set, skipping notification"
-            exit 0
-          fi
-          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          msg="Build failed for \`$BOARD\` on \`${{ github.ref_name }}\` — <$run_url>"
-          curl -s -X POST -H 'Content-type: application/json' \
-            -d "{\"text\":\"$msg\"}" "$SLACK_WEBHOOK_URL"
