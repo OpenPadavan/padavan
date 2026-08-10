@@ -1544,9 +1544,13 @@ static INT32 HQA_MACBbpRegBulkRead(
 	INT32 Ret = 0;
 	UINT32 Offset;
 	UINT16 Len, Tmp;
+#ifdef DBG
 	INT debug_lvl = DebugLevel;
+#endif
 
+#ifdef DBG
 	DebugLevel = DBG_LVL_OFF;
+#endif
 	MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s\n", __func__));
 	memcpy(&Offset, HqaCmdFrame->Data, 4);
 	Offset = PKTL_TRAN_TO_HOST(Offset);
@@ -1566,7 +1570,9 @@ static INT32 HQA_MACBbpRegBulkRead(
 
 	RTMP_IO_READ_BULK(pAd, HqaCmdFrame->Data + 2, Offset, (Len << 2));/* unit in four bytes*/
 	ResponseToQA(HqaCmdFrame, WRQ, 2 + (Len << 2), Ret);
+#ifdef DBG
 	DebugLevel = debug_lvl;
+#endif
 	return Ret;
 }
 
@@ -4926,7 +4932,9 @@ static INT32 HQA_BFProfileDataRead(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *W
 	UCHAR *out = NULL;
 	struct _ATE_CTRL *ate_ctrl = &(pAd->ATECtrl);
 	RTMP_STRING *cmd;
+#ifdef DBG
 	INT debug_lvl = DebugLevel;
+#endif
 
 	ate_ctrl->txbf_info = NULL;
 	os_alloc_mem(pAd, (UCHAR **)&cmd, sizeof(CHAR) * (HQA_BF_STR_SIZE));
@@ -4949,7 +4957,9 @@ static INT32 HQA_BFProfileDataRead(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *W
 	NumOfsub = PKTL_TRAN_TO_HOST(NumOfsub);
 	NdisMoveMemory((PUCHAR)&HqaCmdFrame->Data + 2, (PUCHAR)&NumOfsub, sizeof(NumOfsub));
 	offset += sizeof(NumOfsub);
+#ifdef DBG
 	DebugLevel = DBG_LVL_OFF;
+#endif
 
 	for (subcarrIdx = subcarr_start; subcarrIdx <= subcarr_end; subcarrIdx++) {
 		ate_ctrl->txbf_info = NULL;
@@ -4982,7 +4992,9 @@ BF_PROFILE_DATA_READ_FAIL:
 		os_free_mem(cmd);
 
 	ResponseToQA(HqaCmdFrame, WRQ, 2 + offset, Ret);
+#ifdef DBG
 	DebugLevel = debug_lvl;
+#endif
 	return Ret;
 }
 
@@ -4990,7 +5002,9 @@ static INT32 HQA_BFProfileDataWrite(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *
 {
 	INT32 Ret = 0;
 	UINT16 len = 0;
+#ifdef DBG
 	INT debug_lvl = DebugLevel;
+#endif
 	struct _HQA_BF_STA_PROFILE tmp, *profile;
 	RTMP_STRING *cmd;
 
@@ -5009,7 +5023,9 @@ static INT32 HQA_BFProfileDataWrite(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *
 	}
 	NdisMoveMemory((PUCHAR)&tmp, (PUCHAR)&HqaCmdFrame->Data, len);
 	profile = PKTLA_TRAN_TO_HOST((len) / sizeof(UINT32), &tmp);
+#ifdef DBG
 	DebugLevel = DBG_LVL_OFF;
+#endif
 	PKTLA_DUMP(DBG_LVL_INFO, sizeof(tmp) / sizeof(UINT32), &tmp);	/* Del after debug */
 	memset(cmd, 0x00, HQA_BF_STR_SIZE);
 	sprintf(cmd, "%02x:", profile->pfmuid);
@@ -5037,7 +5053,9 @@ static INT32 HQA_BFProfileDataWrite(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *
 BF_PROFILE_DATA_WRITE_FAIL:
 	MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_INFO, ("%s\n", __func__));
 	ResponseToQA(HqaCmdFrame, WRQ, 2, Ret);
+#ifdef DBG
 	DebugLevel = debug_lvl;
+#endif
 	return Ret;
 }
 
@@ -5750,14 +5768,18 @@ static INT32 HQA_MUSetGroup(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *WRQ, str
 static INT32 HQA_MUGetQD(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *WRQ, struct _HQA_CMD_FRAME *HqaCmdFrame)
 {
 	INT32 Ret = 0;
+#ifdef DBG
 	INT debug_lvl = DebugLevel;
+#endif
 	INT32 subcarrier_idx = 0;
 	MU_STRUCT_MU_QD qd;
 
 	NdisMoveMemory((PUCHAR)&subcarrier_idx, HqaCmdFrame->Data, sizeof(subcarrier_idx));
 	NdisZeroMemory(&qd, sizeof(qd));
 	subcarrier_idx = PKTL_TRAN_TO_HOST(subcarrier_idx);
+#ifdef DBG
 	DebugLevel = DBG_LVL_OFF;
+#endif
 	Ret = hqa_wifi_test_mu_get_qd(pAd, subcarrier_idx, &qd);
 	PKTLA_DUMP(DBG_LVL_INFO, sizeof(qd) / sizeof(int), &qd);
 	NdisMoveMemory(HqaCmdFrame->Data + 2, (UCHAR *)&qd, sizeof(qd));
@@ -5765,7 +5787,9 @@ static INT32 HQA_MUGetQD(PRTMP_ADAPTER pAd, RTMP_IOCTL_INPUT_STRUCT *WRQ, struct
 			 ("%s: sub:%u, qd.length:%zu, pqd:%p, HqaCmd->Data:%p\n",
 			  __func__, subcarrier_idx, sizeof(qd), &qd, HqaCmdFrame->Data));
 	ResponseToQA(HqaCmdFrame, WRQ, 2 + sizeof(qd), Ret);
+#ifdef DBG
 	DebugLevel = debug_lvl;
+#endif
 	return Ret;
 }
 
