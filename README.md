@@ -100,25 +100,39 @@ The build copies the board kernel/BusyBox configs, assembles the proprietary dri
 
 This repository ships its own CI workflow (`.github/workflows/build.yml`) that builds firmware on GitHub's servers.
 
-**On every `push` to `main`**, the CI builds a single default board (`xiaomi/mi-r3pro`) and uploads the resulting image as a build artifact.
+The workflow runs in two modes:
 
-**To build a specific router manually:**
+| Event | Action |
+|---|---|
+| `push` / `pull_request` | **Validation only** — checks every board template maps to a real board directory. No firmware is built. |
+| `workflow_dispatch` (manual) | **Build** — requires you to explicitly pick the router(s) to build. |
+
+**To build firmware manually:**
 
 1. Open the **Actions** tab and select the **build** workflow.
 2. Click **Run workflow**.
-3. Pick the target router from the **Router to build** dropdown.
-4. Click the green **Run workflow** button.
+3. Fill in the **Router(s) to build** field (`boards`, required):
+   - a single board: `xiaomi/mi-3`
+   - several boards, comma-separated: `xiaomi/mi-3,phicomm/psg1218,tplink/tl_wr841n-v13`
+   - all boards: `all`
+4. Optionally add **config overrides** (`config`) to customize the firmware — see below.
+5. Click the green **Run workflow** button.
 
-The dropdown currently offers:
-
-- `xiaomi/mi-r3p_spi` — Xiaomi Mi-R3P (SPI)
-- `xiaomi/mi-r3pro` — Xiaomi Mi-R3PRO
-- `unielec/u7621-06` — UniElec U7621-06
-- `tplink/tl_wr840n-v6` — TP-Link TL-WR840N v6
-
-Add more routers by appending entries to the `inputs.board.options` list in `.github/workflows/build.yml`. The default board built on every push is set by the `DEFAULT_BOARD` environment variable.
-
+Every board name is validated before the build starts; unknown boards abort the run with a clear error.
 Finished runs publish the firmware as downloadable artifacts (retained for a limited time, for personal use — the firmware license does not permit binary redistribution).
+
+**Customizing the firmware build** (`config` input):
+
+The `config` field accepts extra `CONFIG_*` lines that are appended to the selected board template before compiling — e.g. to add packages or change kernel options:
+
+```text
+CONFIG_FIRMWARE_INCLUDE_ARIA=y
+CONFIG_FIRMWARE_INCLUDE_TOR=y
+```
+
+Only `CONFIG_*=...` assignments, `#` comments and blank lines are allowed; anything else fails the run. The full list of options is documented in `trunk/configs/templates/<vendor>/<board>.config`.
+
+To change the defaults permanently, edit the board template under `trunk/configs/templates/<vendor>/` — each template's `CONFIG_VENDOR` / `CONFIG_FIRMWARE_PRODUCT_ID` must keep matching a directory under `trunk/configs/boards/<vendor>/<product-id>/` (this is validated in CI).
 
 > Reference workflow maintained by the community: [padavan-builder-workflow](https://github.com/shvchk/padavan-builder-workflow) — automated Padavan firmware builds on GitHub servers
 

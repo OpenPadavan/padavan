@@ -3,158 +3,140 @@ name: build
 on:
   push:
     branches: [ main ]
+  pull_request:
   workflow_dispatch:
     inputs:
-      board:
-        description: 'Router to build, or "all" for every supported board'
+      boards:
+        description: 'Router(s) to build, comma-separated (ex: xiaomi/mi-3,phicomm/psg1218) or "all" for every board'
+        required: true
+        type: string
+      config:
+        description: 'Optional config overrides, one CONFIG_* line per line (appended to the board template)'
         required: false
-        default: all
-        type: choice
-        options:
-          - all
-          - 5k/5k-w20
-          - a5-v11/a5-v11_16m
-          - a5-v11/a5-v11_4m
-          - a5-v11/a5-v11_8m
-          - asus/rt-ac1200
-          - asus/rt-ac1200gu
-          - asus/rt-ac1200hp
-          - asus/rt-ac51u
-          - asus/rt-ac54u
-          - asus/rt-ac56
-          - asus/RT-AC65P
-          - asus/RT-AC85P
-          - asus/rt-n10c1
-          - asus/rt-n11p
-          - asus/rt-n11pb1
-          - asus/rt-n12plus
-          - asus/rt-n13ub1
-          - asus/rt-n14u
-          - asus/rt-n56u
-          - asus/rt-n56ub1
-          - asus/rt-n56u-ge2
-          - atel/alr-u270
-          - belkin/bn750db
-          - dlink/dir-300b1
-          - dlink/dir-300b7
-          - dlink/dir-320b1
-          - dlink/dir-620a1
-          - dlink/dir-620d1
-          - dlink/dir-860l
-          - dlink/dir-882
-          - gl/gl-mt300a
-          - gl/gl-mt300n
-          - gl/gl-mt300n-v2
-          - hiwifi/hc5661a
-          - kroks/kndrt31r26
-          - kroks/kndrt31r3
-          - linksys/ea-8100
-          - mqmaker/mq-witi-256
-          - mqmaker/mq-witi-512
-          - newifi/newifi-d1
-          - newifi/newifi-d2
-          - newifi/newifi-mini
-          - newifi/newifi-y1s
-          - nexx/wt3020a
-          - nexx/wt3020h
-          - nexx/wt3020h16m
-          - phicomm/psg1218
-          - phicomm/psg1218_256
-          - samsung/swr1100
-          - sercomm/rt-s1010
-          - sercomm/smartbox_spi
-          - sercomm/smbxpronand
-          - sercomm/smbxturbo
-          - snr/snr-md1
-          - snr/snr-me1
-          - snr/snr-w4n-m
-          - snr/snr-w4n-m_usb
-          - totolink/a3004ns
-          - tplink/tl_c20-v1
-          - tplink/tl_c20-v1_16m
-          - tplink/tl_c20-v4
-          - tplink/tl_c20-v5
-          - tplink/tl_c2-v1
-          - tplink/tl_c50-v1
-          - tplink/tl_c50-v3
-          - tplink/tl_c50-v4
-          - tplink/tl_c5-v4
-          - tplink/tl_ec220_g5-v2
-          - tplink/tl_mr200-v1
-          - tplink/tl_mr3020-v3
-          - tplink/tl_mr3420-v5
-          - tplink/tl_wdr7300-v5
-          - tplink/tl_wr840n-v4
-          - tplink/tl_wr840n-v4_usb
-          - tplink/tl_wr840n-v5
-          - tplink/tl_wr840n-v5_ru
-          - tplink/tl_wr840n-v6
-          - tplink/tl_wr841n-v13
-          - tplink/tl_wr841n-v13_usb
-          - tplink/tl_wr841n-v14
-          - tplink/tl_wr841n-v14_8m
-          - tplink/tl_wr842n-v5
-          - tplink/tl_wr845n-v3
-          - tplink/tl_wr845n-v4
-          - tuoshi/ts7620n
-          - ubnt/ubnt-erx
-          - unielec/u7621-06
-          - wall-ap/wall-ap
-          - xiaomi/mi-3
-          - xiaomi/mi-3_spi
-          - xiaomi/mi-3c
-          - xiaomi/mi-4
-          - xiaomi/mi-4a_100m
-          - xiaomi/mi-4c
-          - xiaomi/mi-mini
-          - xiaomi/mi-nano
-          - xiaomi/mi-r3g
-          - xiaomi/mi-r3g_spi
-          - xiaomi/mi-r3gv2
-          - xiaomi/mi-r3p_spi
-          - xiaomi/mi-r3pro
-          - xiaomi/r2100
-          - xiaomi/rm-ac2100
-          - xiaomi-u-boot/mi-4a_100m
-          - xiaomi-u-boot/mi-4c
-          - xiaomi-u-boot/mi-mini
-          - xiaomi-u-boot/mi-r3gv2
-          - youhua/wr1200js
-          - youku/yk-l1
-          - youku/yk-l1c
-          - zbt/zbt-we1326
-          - zbt/zbt-we1626
-          - zbt/zbt-we826t2
-          - zbt/zbt-wg3526
-          - zbt/zbt-wg3526-32
-          - zbt/zbt-wr8305rt
-          - zte/ZTE_E8820S
-          - zyxel/kn-4g3
-          - zyxel/kn-4g3b
-          - zyxel/kn-extra
-          - zyxel/kn-extra2
-          - zyxel/kn-giga3
-          - zyxel/kn-lite
-          - zyxel/kn-lite2
-          - zyxel/kn-lite3
-          - zyxel/kn-lite3b
-          - zyxel/kn-omni
-          - zyxel/kn-omni2
-          - zyxel/kn-start2
-          - zyxel/kn-ultra2
-          - zyxel/kn-viva
+        type: string
 
 env:
   IMAGE_NAME: padavan-build
-  DEFAULT_BOARD: xiaomi/mi-r3pro
 
 permissions:
   contents: read
 
 jobs:
+  validate:
+    name: Validate board configs
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate templates map to board dirs
+        run: |
+          set -euo pipefail
+          errors=0
+          while IFS= read -r tpl; do
+            rel="${tpl#trunk/configs/templates/}"
+            VENDOR=$(grep -E '^CONFIG_VENDOR=' "$tpl" | head -1 | cut -d= -f2)
+            PID=$(grep -E '^CONFIG_FIRMWARE_PRODUCT_ID=' "$tpl" | head -1 | cut -d= -f2 | tr -d '"')
+            if [ -z "$VENDOR" ] || [ -z "$PID" ]; then
+              echo "::error file=$tpl::missing CONFIG_VENDOR or CONFIG_FIRMWARE_PRODUCT_ID"
+              errors=$((errors+1))
+              continue
+            fi
+            if [ ! -d "trunk/configs/boards/$VENDOR/$PID" ]; then
+              echo "::error file=$tpl::no matching dir trunk/configs/boards/$VENDOR/$PID"
+              errors=$((errors+1))
+            fi
+          done < <(find trunk/configs/templates -name '*.config')
+          if [ "$errors" -gt 0 ]; then
+            echo "::error::$errors template(s) without a matching board dir"
+            exit 1
+          fi
+          echo "All $(( $(find trunk/configs/templates -name '*.config' | wc -l) )) templates validated OK"
+
+  resolve-boards:
+    name: Resolve board list
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'workflow_dispatch'
+    outputs:
+      boards: ${{ steps.resolve.outputs.boards }}
+      config: ${{ steps.resolve.outputs.config }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate boards and config overrides
+        id: resolve
+        env:
+          REQUESTED_BOARDS: ${{ inputs.boards }}
+          CUSTOM_CONFIG: ${{ inputs.config }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$REQUESTED_BOARDS" ]; then
+            echo "::error::boards input is required"
+            exit 1
+          fi
+
+          if [ "$REQUESTED_BOARDS" = "all" ]; then
+            BOARDS=$(find trunk/configs/templates -name '*.config' \
+                     | sed -e 's#^trunk/configs/templates/##' -e 's#\.config$##' \
+                     | sort)
+          else
+            BOARDS=""
+            IFS=',' read -ra ARR <<< "$REQUESTED_BOARDS"
+            for b in "${ARR[@]}"; do
+              b="${b//[[:space:]]/}"
+              [ -n "$b" ] || continue
+              if [[ ! "$b" =~ ^[A-Za-z0-9_/-]+$ ]]; then
+                echo "::error::invalid board format '$b' (allowed: letters, digits, _ / -)"
+                exit 1
+              fi
+              tpl="trunk/configs/templates/$b.config"
+              if [ -f "$tpl" ]; then
+                VENDOR=$(grep -E '^CONFIG_VENDOR=' "$tpl" | head -1 | cut -d= -f2)
+                PID=$(grep -E '^CONFIG_FIRMWARE_PRODUCT_ID=' "$tpl" | head -1 | cut -d= -f2 | tr -d '"')
+                if [ -z "$VENDOR" ] || [ -z "$PID" ] || [ ! -d "trunk/configs/boards/$VENDOR/$PID" ]; then
+                  echo "::error::board '$b' has no matching board dir (vendor=$VENDOR pid=$PID)"
+                  exit 1
+                fi
+                BOARDS="${BOARDS}${b}"$'\n'
+              else
+                echo "::error::unknown board '$b'. Run the workflow with boards=all to see the full list."
+                exit 1
+              fi
+            done
+          fi
+
+          JSON=$(printf '%s\n' "$BOARDS" | sed '/^$/d' | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "boards=$JSON" >> "$GITHUB_OUTPUT"
+          echo "Resolved boards: $(printf '%s\n' "$BOARDS" | sed '/^$/d' | tr '\n' ' ')"
+
+          if [ -n "$CUSTOM_CONFIG" ]; then
+            # allow only blank lines, comments and CONFIG_*= assignments
+            INVALID=0
+            while IFS= read -r line; do
+              case "$line" in
+                ''|'#'*|' '*|'	'*) ;;
+                CONFIG_[A-Za-z0-9_]*=*) ;;
+                *)
+                  echo "::error::invalid config line: '$line'"
+                  INVALID=1
+                  ;;
+              esac
+            done <<< "$CUSTOM_CONFIG"
+            if [ "$INVALID" -ne 0 ]; then
+              echo "::error::config contains invalid lines (only CONFIG_*= assignments, comments and blank lines allowed)"
+              exit 1
+            fi
+            echo "config<<CFGEOF" >> "$GITHUB_OUTPUT"
+            printf '%s\n' "$CUSTOM_CONFIG" >> "$GITHUB_OUTPUT"
+            echo "CFGEOF" >> "$GITHUB_OUTPUT"
+          fi
+
   build-image:
     name: Build container image
     runs-on: ubuntu-22.04
+    if: github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       packages: write
@@ -173,37 +155,10 @@ jobs:
           docker tag "$IMAGE_NAME" "$IMG:latest"
           docker push "$IMG:latest"
 
-  resolve-boards:
-    name: Resolve board list
-    runs-on: ubuntu-22.04
-    outputs:
-      boards: ${{ steps.resolve.outputs.boards }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Resolve board list
-        id: resolve
-        run: |
-          REQUESTED="${{ inputs.board }}"
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            echo "Push: building default board ${{ env.DEFAULT_BOARD }}"
-            echo "boards=[\"${{ env.DEFAULT_BOARD }}\"]" >> "$GITHUB_OUTPUT"
-          elif [[ -z "$REQUESTED" || "$REQUESTED" == "all" ]]; then
-            echo "Building all supported boards"
-            BOARDS=$(find trunk/configs/templates -name '*.config' | \
-                     sed -e 's#^trunk/configs/templates/##' -e 's#\.config$##' | \
-                     sort)
-            JSON=$(printf '%s\n' "$BOARDS" | jq -R -s -c 'split("\n") | map(select(length > 0))')
-            echo "boards=$JSON" >> "$GITHUB_OUTPUT"
-          else
-            echo "Building single board: $REQUESTED"
-            echo "boards=[\"$REQUESTED\"]" >> "$GITHUB_OUTPUT"
-          fi
-
   build-toolchain:
     name: Build cross toolchain
     runs-on: ubuntu-22.04
+    if: github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       actions: write
@@ -248,6 +203,7 @@ jobs:
   build-firmware:
     name: Build firmware (${{ matrix.board }})
     runs-on: ubuntu-22.04
+    if: github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       actions: write
@@ -295,6 +251,16 @@ jobs:
       - name: Select board configuration
         working-directory: trunk
         run: cp "configs/templates/$BOARD.config" .config
+
+      - name: Apply custom configuration
+        if: needs.resolve-boards.outputs.config != ''
+        working-directory: trunk
+        env:
+          CUSTOM_CONFIG: ${{ needs.resolve-boards.outputs.config }}
+        run: |
+          printf '%s\n' "$CUSTOM_CONFIG" >> .config
+          echo "[$(date -u '+%H:%M:%S')] custom config overrides applied:"
+          printf '%s\n' "$CUSTOM_CONFIG"
 
       - name: Download source tarballs (strongswan)
         working-directory: trunk
