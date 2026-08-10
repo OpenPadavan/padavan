@@ -117,7 +117,3 @@ config RT_DEBUG
 	bool "Include Debug messages"
 	default n
 
-config MT7615_AP
-	tristate "MT7615 AP support"
-	default n
-
