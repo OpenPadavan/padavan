@@ -11,7 +11,12 @@
 #define PKTS_TRAN_TO_HOST(_Val) _Val
 #define PKTLA_TRAN_TO_HOST(_len, _byte_array) _byte_array
 #define PKTLA_TRAN_TO_NET(_len, _byte_array) _byte_array
-#define PKTLA_DUMP(_lvl, _len, _byte_arrary) _byte_array
+#define PKTLA_DUMP(_lvl, _len, _byte_arrary)({			\
+		INT _cnt = 0;										\
+		UINT32 *_arr = (UINT32 *)_byte_arrary;				\
+		(void)_arr; /* suppress unused when log disabled */ \
+		_len;												\
+	});
 #define PKTUC_DUMP(_lvl, _len, _byte_arrary) _byte_array
 #else
 #define PKTL_TRAN_TO_NET(_Val) OS_HTONL(_Val)
@@ -35,6 +40,7 @@
 #define PKTLA_DUMP(_lvl, _len, _byte_array)({			\
 		INT _cnt = 0;										\
 		UINT32 *_arr = (UINT32 *)_byte_array;				\
+		(void)_arr; /* suppress unused when log disabled */ \
 		for (_cnt = 0; _cnt < _len; _cnt++)						\
 			MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, _lvl, ("DWORD%d:%08x\n", _cnt, _arr[_cnt]));	\
 		_len;												\

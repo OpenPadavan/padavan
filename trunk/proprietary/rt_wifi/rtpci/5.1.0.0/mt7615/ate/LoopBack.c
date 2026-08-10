@@ -475,6 +475,7 @@ VOID LoopBack_Rx(RTMP_ADAPTER *pAd, UINT32 pktlen, UINT8 *pData)
 		EVENT_RXD EvnRxD;
 
 		/* FwCMDRspTxD_STRUC FwCMDRspTxD; */
+		(void)TotalLength; /* suppress unused when debug disabled */
 		if (pAd->LbCtrl.DebugMode) {
 			MTWF_LOG(DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s, Debug Mode, Total Len:%d\n", __func__, TotalLength));
 			LPLength = pktlen;
