@@ -11,7 +11,12 @@
 #define PKTS_TRAN_TO_HOST(_Val) _Val
 #define PKTLA_TRAN_TO_HOST(_len, _byte_array) _byte_array
 #define PKTLA_TRAN_TO_NET(_len, _byte_array) _byte_array
-#define PKTLA_DUMP(_lvl, _len, _byte_arrary) _byte_array
+#define PKTLA_DUMP(_lvl, _len, _byte_arrary)({			\
+		INT _cnt = 0;										\
+		UINT32 *_arr = (UINT32 *)_byte_arrary;				\
+		(void)_arr; /* suppress unused when log disabled */ \
+		_len;												\
+	});
 #define PKTUC_DUMP(_lvl, _len, _byte_arrary) _byte_array
 #else
 #define PKTL_TRAN_TO_NET(_Val) OS_HTONL(_Val)
