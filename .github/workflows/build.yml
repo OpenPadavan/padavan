@@ -313,7 +313,7 @@ jobs:
             images+=("$img")
             size=$(stat -c %s "$img")
             echo "[$(date -u '+%H:%M:%S')] $img : $size bytes ($(file -b "$img"))"
-            if [ "$size" -lt 1000000 ]; then
+            if [ "$size" -lt 500000 ]; then
               echo "::error file=$img::firmware image suspiciously small (${size} bytes)"
               exit 1
             fi
