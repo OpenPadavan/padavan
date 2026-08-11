@@ -20837,9 +20837,9 @@ done
 
 
   if test x"$STATIC_LIBS" != x"no"; then
-    LIBS="${LIBS} ${STATIC_LIBS}/libavcodec.a ${STATIC_LIBS}/libavformat.a ${STATIC_LIBS}/libavutil.a"
+    LIBS="${LIBS} ${STATIC_LIBS}/libavformat.a ${STATIC_LIBS}/libavcodec.a ${STATIC_LIBS}/libavutil.a"
   else
-    LIBS="${LIBS} -lavcodec -lavformat -lavutil"
+    LIBS="${LIBS} -lavformat -lavcodec -lavutil"
   fi
 fi
 

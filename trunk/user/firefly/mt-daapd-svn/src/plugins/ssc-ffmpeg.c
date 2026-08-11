@@ -33,11 +33,11 @@
 #define BUFFER_SIZE (AVCODEC_MAX_AUDIO_FRAME_SIZE * 3)/2
 
 typedef struct tag_ssc_handle {
-    AVCodec *pCodec;
+    const AVCodec *pCodec;
     AVCodecContext *pCodecCtx;
     AVFormatContext *pFmtCtx;
     AVFrame *pFrame;
-    AVPacket packet;
+    AVPacket *packet;
     AVInputFormat *pFormat;
 
     uint8_t *packet_data;
@@ -122,8 +122,6 @@ char *ssc_ffmpeg_error(void *pv) {
 }
 
 PLUGIN_INFO *plugin_info(void) {
-    av_register_all();
-
     return &_pi;
 }
 
@@ -204,11 +202,7 @@ int ssc_ffmpeg_open(void *vp, MP3FILE *pmp3) {
 
     handle->audio_stream = -1;
     for(i=0; i < handle->pFmtCtx->nb_streams; i++) {
-#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(52, 64, 0)
-        if(handle->pFmtCtx->streams[i]->codec->codec_type==CODEC_TYPE_AUDIO) {
-#else
-        if(handle->pFmtCtx->streams[i]->codec->codec_type==AVMEDIA_TYPE_AUDIO) {
-#endif
+        if(handle->pFmtCtx->streams[i]->codecpar->codec_type==AVMEDIA_TYPE_AUDIO) {
             handle->audio_stream = i;
             break;
         }
@@ -219,27 +213,30 @@ int ssc_ffmpeg_open(void *vp, MP3FILE *pmp3) {
         return FALSE;
     }
 
-    handle->pCodecCtx = handle->pFmtCtx->streams[handle->audio_stream]->codec;
-
-    handle->pCodec = avcodec_find_decoder(handle->pCodecCtx->codec_id);
+    handle->pCodec = avcodec_find_decoder(handle->pFmtCtx->streams[handle->audio_stream]->codecpar->codec_id);
     if(!handle->pCodec) {
         handle->errnum = SSC_FFMPEG_E_BADCODEC;
         return FALSE;
     }
 
-    if(handle->pCodec->capabilities & AV_CODEC_CAP_TRUNCATED)
-        handle->pCodecCtx->flags |= AV_CODEC_FLAG_TRUNCATED;
+    handle->pCodecCtx = avcodec_alloc_context3(handle->pCodec);
+    if(!handle->pCodecCtx) {
+        handle->errnum = SSC_FFMPEG_E_BADCODEC;
+        return FALSE;
+    }
+    avcodec_parameters_to_context(handle->pCodecCtx, handle->pFmtCtx->streams[handle->audio_stream]->codecpar);
 
-#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(53, 5, 0)
-    if(avcodec_open(handle->pCodecCtx, handle->pCodec) < 0) {
-#else
     if(avcodec_open2(handle->pCodecCtx, handle->pCodec, NULL) < 0) {
-#endif
         handle->errnum = SSC_FFMPEG_E_CODECOPEN;
         return FALSE;
     }
 
-    handle->pFrame = avcodec_alloc_frame();
+    handle->pFrame = av_frame_alloc();
+    handle->packet = av_packet_alloc();
+    if(!handle->pFrame || !handle->packet) {
+        handle->errnum = SSC_FFMPEG_E_CODECOPEN;
+        return FALSE;
+    }
 
     return TRUE;
 }
@@ -251,21 +248,23 @@ int ssc_ffmpeg_close(void *vp) {
         return TRUE;
 
     if(handle->pFrame)
-        av_free(handle->pFrame);
+        av_frame_free(&handle->pFrame);
+
+    if(handle->pCodecCtx)
+        avcodec_free_context(&handle->pCodecCtx);
+
+    if(handle->packet)
+        av_packet_free(&handle->packet);
 
     if(handle->pFmtCtx)
-#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(53, 21, 0)
-        av_close_input_file(handle->pFmtCtx);
-#else
         avformat_close_input(&handle->pFmtCtx);
-#endif
 
     memset(handle,0,sizeof(SSCHANDLE));
     return TRUE;
 }
 
 #if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(53, 25, 0)
-inline int copy_avsamples(AVCodecContext *ctx, AVFrame *frame, char *buffer, int len) {
+static inline int copy_avsamples(AVCodecContext *ctx, AVFrame *frame, char *buffer, int len) {
     int dataSize = av_samples_get_buffer_size(NULL, ctx->channels,
                                              frame->nb_samples, ctx->sample_fmt, 1);
     if (len < dataSize)
@@ -280,76 +279,44 @@ inline int copy_avsamples(AVCodecContext *ctx, AVFrame *frame, char *buffer, int
 
 int _ssc_ffmpeg_read_frame(void *vp, char *buffer, int len) {
     SSCHANDLE *handle = (SSCHANDLE *)vp;
-    int data_size;
-    int len1;
-#if LIBAVCODEC_VERSION_INT > AV_VERSION_INT(52, 25, 0)
-    int got_frame;
-    AVPacket pkt;
-    av_init_packet(&pkt);
-#endif
+    int data_size = 0;
+    int ret;
 
     while(1) {
         while(handle->packet_size > 0) {
-#if LIBAVCODEC_VERSION_INT <= AV_VERSION_INT(52, 25, 0)
-            data_size = len;
-            len1=avcodec_decode_audio2(handle->pCodecCtx,
-                                      (int16_t*)buffer,
-                                      &data_size,
-                                      handle->packet_data,
-                                      handle->packet_size);
-#elif LIBAVCODEC_VERSION_INT < AV_VERSION_INT(53, 25, 0)
-            data_size = len;
-            pkt.data = handle->packet_data;
-            pkt.size = handle->packet_size;
-            len1=avcodec_decode_audio3(handle->pCodecCtx,
-                                      (int16_t*)buffer,
-                                      &data_size,
-                                      &pkt);
-#else
-            data_size = 0;
-            got_frame = 0;
-            pkt.data = handle->packet_data;
-            pkt.size = handle->packet_size;
-            len1=avcodec_decode_audio4(handle->pCodecCtx, handle->pFrame,
-                                        &got_frame, &pkt);
-
-            if (len1 >= 0 && got_frame) {
-                data_size = copy_avsamples(handle->pCodecCtx, handle->pFrame, buffer, len);
-                if (data_size < 0)
-                    len1 = -1;
-            } else if (len1 == 0)
-                len1 = -1;
-#endif
-            if(len1 < 0) {
-                /* skip frame */
-                handle->packet_size=0;
+            ret = avcodec_send_packet(handle->pCodecCtx, handle->packet);
+            if (ret < 0 && ret != AVERROR(EAGAIN)) {
+                handle->packet_size = 0;
+                handle->packet_data = NULL;
                 break;
             }
 
-            handle->packet_data += len1;
-            handle->packet_size -= len1;
+            ret = avcodec_receive_frame(handle->pCodecCtx, handle->pFrame);
+            handle->packet_size = 0;
+            handle->packet_data = NULL;
 
-            if(data_size <= 0)
+            if (ret == 0) {
+                data_size = copy_avsamples(handle->pCodecCtx, handle->pFrame, buffer, len);
+                if (data_size < 0)
+                    continue;
+            } else if (ret == AVERROR(EAGAIN)) {
                 continue;
+            } else {
+                continue;
+            }
 
             handle->total_decoded += data_size;
             return data_size;
         }
 
         do {
-            if(handle->packet.data)
-                av_free_packet(&handle->packet);
-
-#if LIBAVCODEC_VERSION_INT <= AV_VERSION_INT(52, 25, 0)
-            if(av_read_packet(handle->pFmtCtx, &handle->packet) < 0)
-#else
-            if(av_read_frame(handle->pFmtCtx, &handle->packet) < 0)
-#endif
+            av_packet_unref(handle->packet);
+            if(av_read_frame(handle->pFmtCtx, handle->packet) < 0)
                 return -1;
-        } while(handle->packet.stream_index != handle->audio_stream);
+        } while(handle->packet->stream_index != handle->audio_stream);
 
-        handle->packet_size = handle->packet.size;
-        handle->packet_data = handle->packet.data;
+        handle->packet_size = handle->packet->size;
+        handle->packet_data = handle->packet->data;
     }
 }
 

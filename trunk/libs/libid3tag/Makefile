@@ -1,7 +1,9 @@
 SRC_NAME=libid3tag-0.15.1b
 
+CFLAGS += -fPIC
+
 all: config_test
-	$(MAKE) -j$(HOST_NCPU) -C $(SRC_NAME)
+	$(MAKE) -j$(HOST_NCPU) -C $(SRC_NAME) CFLAGS="$(CFLAGS)"
 
 config_test:
 	( if [ -f ./config_done ]; then \

@@ -1,9 +1,11 @@
 SRC_NAME=sqlite-autoconf-3480000
 SRC_URL=https://www.sqlite.org/2025/$(SRC_NAME).tar.gz
 
+CFLAGS += -fPIC
+
 #all: download_test extract_test config_test
 all: config_test
-	$(MAKE) -j$(HOST_NCPU) -C $(SRC_NAME)
+	$(MAKE) -j$(HOST_NCPU) -C $(SRC_NAME) CFLAGS="$(CFLAGS)"
 
 download_test:
 	( if [ ! -f $(SRC_NAME).tar.gz ]; then \
