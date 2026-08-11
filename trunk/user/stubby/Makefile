@@ -1,8 +1,10 @@
 SRC_NAME=stubby-0.4.3
 SRC_URL=https://github.com/getdnsapi/stubby/archive/refs/tags/v0.4.3.tar.gz
 
-#all: download_test extract_test config_test
-all: config_test
+CFLAGS += -ffunction-sections -fdata-sections -fvisibility=hidden
+LDFLAGS += -Wl,--gc-sections
+
+all: download_test extract_test config_test
 	$(MAKE) -j$(HOST_NCPU) -C $(SRC_NAME)/build
 
 download_test:
