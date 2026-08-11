@@ -160,7 +160,7 @@ static NTSTATUS check_info3_in_group(TALLOC_CTX *mem_ctx,
 	if (num_require_membership_of_sid > 1) {
 
 		/* Allocate the maximum possible size */
-		single_group_sid = TALLOC(mem_ctx, group_sid_length);
+		single_group_sid = TALLOC(mem_ctx, group_sid_length + 1);
 		if (!single_group_sid)
 			return NT_STATUS_NO_MEMORY;
 
