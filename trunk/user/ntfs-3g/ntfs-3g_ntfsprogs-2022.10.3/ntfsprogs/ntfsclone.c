@@ -1993,6 +1993,7 @@ static int walk_clusters(ntfs_volume *volume, struct ntfs_walk_cluster *walk)
 		err = ntfs_file_record_read(volume, mref, &ni->mrec, NULL);
 		if (err == -1) {
 			free(ni);
+			ni = NULL;
 			continue;
 		}
 
@@ -2010,6 +2011,7 @@ static int walk_clusters(ntfs_volume *volume, struct ntfs_walk_cluster *walk)
 
 		free(ni->mrec);
 		free(ni);
+		ni = NULL;
 
 		if (deleted_inode)
 			continue;
