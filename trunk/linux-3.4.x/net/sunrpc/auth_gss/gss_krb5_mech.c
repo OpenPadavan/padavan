@@ -293,7 +293,7 @@ gss_import_v1_context(const void *p, const void *end, struct krb5_ctx *ctx)
 	 * the uses of the context fields; so it includes some stuff we
 	 * just give some minimal sanity-checking, and some we ignore
 	 * completely (like the next twenty bytes): */
-	if (unlikely(p + 20 > end || p + 20 < p)) {
+	if (unlikely(end - p < 20)) {
 		p = ERR_PTR(-EFAULT);
 		goto out_err;
 	}
