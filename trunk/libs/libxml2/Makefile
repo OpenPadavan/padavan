@@ -59,7 +59,10 @@ configure:
 		--with-xptr \
 		--with-zlib=$(STAGEDIR) \
 		--host=$(HOST_TARGET) \
-		--build=$(HOST_BUILD) ; \
+		--build=$(HOST_BUILD) \
+		ac_cv_func_getentropy=no \
+		ac_cv_func_arc4random=no \
+		ac_cv_func_arc4random_buf=no ; \
 	)
 
 clean:
