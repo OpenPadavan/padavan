@@ -299,7 +299,7 @@ continue_read:
 			}
 			if (!(replace[i].flags & OPT_KERNELDATA)) {
 				ebt_print_error("ebtablesd: table %s has not "
-				                "been opened");
+				                "been opened", replace[i].name);
 				goto write_msg;
 			}
 			/* The counters from the kernel are useless if we 
@@ -327,7 +327,7 @@ continue_read:
 			}
 			if (!(replace[i].flags & OPT_KERNELDATA)) {
 				ebt_print_error("ebtablesd: table %s has not "
-				                "been opened");
+				                "been opened", replace[i].name);
 				goto write_msg;
 			}
 			replace[i].filename = (char *)malloc(strlen(argv[3]) + 1);
