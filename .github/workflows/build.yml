@@ -6,108 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      router:
-        description: 'Router to build (pick from the dropdown, or use the boards field below for an exact path)'
-        required: false
-        default: 'ASUS/rt-n56u-ge2nb'
-        type: choice
-        options:
-          - ASUS/rt-n56u-ge2nb
-          - asus/rt-ac51u
-          - asus/rt-ac54u
-          - asus/rt-ac56
-          - asus/rt-ac65p
-          - asus/rt-ac85p
-          - asus/rt-ac1200
-          - asus/rt-ac1200gu
-          - asus/rt-ac1200hp
-          - asus/rt-n10c1
-          - asus/rt-n11p
-          - asus/rt-n11pb1
-          - asus/rt-n12plus
-          - asus/rt-n13ub1
-          - asus/rt-n14u
-          - asus/rt-n56u
-          - asus/rt-n56u-ge2
-          - asus/rt-n56ub1
-          - belkin/bn750db
-          - dlink/dir-300b1
-          - dlink/dir-300b7
-          - dlink/dir-320b1
-          - dlink/dir-620a1
-          - dlink/dir-620d1
-          - dlink/dir-860l
-          - dlink/dir-882
-          - gl/gl-mt300a
-          - gl/gl-mt300n
-          - gl/gl-mt300n-v2
-          - hiwifi/hc5661a
-          - linksys/ea-8100
-          - mqmaker/mq-witi-256
-          - mqmaker/mq-witi-512
-          - newifi/newifi-d1
-          - newifi/newifi-d2
-          - newifi/newifi-mini
-          - newifi/newifi-y1s
-          - nexx/wt3020a
-          - phicomm/psg1218
-          - phicomm/psg1218_256
-          - totolink/a3004ns
-          - tplink/tl_c20-v1
-          - tplink/tl_c20-v4
-          - tplink/tl_c20-v5
-          - tplink/tl_c5-v4
-          - tplink/tl_c50-v1
-          - tplink/tl_c50-v3
-          - tplink/tl_c50-v4
-          - tplink/tl_ec220_g5-v2
-          - tplink/tl_mr200-v1
-          - tplink/tl_mr3020-v3
-          - tplink/tl_mr3420-v5
-          - tplink/tl_wdr7300-v5
-          - tplink/tl_wr840n-v4
-          - tplink/tl_wr840n-v5
-          - tplink/tl_wr840n-v6
-          - tplink/tl_wr841n-v13
-          - tplink/tl_wr841n-v14
-          - tplink/tl_wr842n-v5
-          - tplink/tl_wr845n-v4
-          - ubnt/ubnt-erx
-          - unielec/u7621-06
-          - wall-ap/wall-ap
-          - xiaomi/mi-3
-          - xiaomi/mi-3c
-          - xiaomi/mi-3_spi
-          - xiaomi/mi-4
-          - xiaomi/mi-4a_100m
-          - xiaomi/mi-4c
-          - xiaomi/mi-mini
-          - xiaomi/mi-nano
-          - xiaomi/mi-r3g
-          - xiaomi/mi-r3gv2
-          - xiaomi/mi-r3pro
-          - xiaomi/r2100
-          - xiaomi/rm-ac2100
-          - youku/yk-l1
-          - youku/yk-l1c
-          - zbt/zbt-wg3526
-          - zbt/zbt-wg3526-32
-          - zbt/zbt-we826t2
-          - zte/ZTE_E8820S
-          - zyxel/kn-4g3
-          - zyxel/kn-omni
-          - zyxel/kn-omni2
-          - zyxel/kn-lite
-          - zyxel/kn-lite2
-          - zyxel/kn-lite3
-          - zyxel/kn-extra
-          - zyxel/kn-extra2
-          - zyxel/kn-giga3
-          - zyxel/kn-ultra2
-          - zyxel/kn-viva
       boards:
-        description: 'Exact router(s), comma-separated (ex: xiaomi/mi-3,phicomm/psg1218) or "all" for every board. Overrides the dropdown.'
-        required: false
+        description: 'Router(s) to build, comma-separated (ex: xiaomi/mi-3,phicomm/psg1218) or "all" for every board'
+        required: true
         type: string
       config:
         description: 'Optional config overrides, one CONFIG_* line per line (appended to the board template)'
@@ -167,18 +68,13 @@ jobs:
         id: resolve
         env:
           REQUESTED_BOARDS: ${{ inputs.boards }}
-          ROUTER_CHOICE: ${{ inputs.router }}
           CUSTOM_CONFIG: ${{ inputs.config }}
         run: |
           set -euo pipefail
 
           if [ -z "$REQUESTED_BOARDS" ]; then
-            if [ -n "$ROUTER_CHOICE" ]; then
-              REQUESTED_BOARDS="$ROUTER_CHOICE"
-            else
-              echo "::error::boards input is required"
-              exit 1
-            fi
+            echo "::error::boards input is required"
+            exit 1
           fi
 
           if [ "$REQUESTED_BOARDS" = "all" ]; then
