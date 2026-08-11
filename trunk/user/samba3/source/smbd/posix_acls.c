@@ -2719,9 +2719,9 @@ static size_t merge_default_aces( SEC_ACE *nt_ace_list, size_t num_aces)
 					 * Merge the inherited ACE onto the non-inherited ACE.
 					 */
 
-					nt_ace_list[i].flags = SEC_ACE_FLAG_OBJECT_INHERIT|SEC_ACE_FLAG_CONTAINER_INHERIT|
-								(i_inh ? SEC_ACE_FLAG_INHERITED_ACE : 0);
-					if (num_aces - j - 1 > 0)
+nt_ace_list[i].flags = SEC_ACE_FLAG_OBJECT_INHERIT|SEC_ACE_FLAG_CONTAINER_INHERIT|
+							(i_inh ? SEC_ACE_FLAG_INHERITED_ACE : 0);
+					if (j + 1 < num_aces)
 						memmove(&nt_ace_list[j], &nt_ace_list[j+1], (num_aces-j-1) *
 								sizeof(SEC_ACE));
 
