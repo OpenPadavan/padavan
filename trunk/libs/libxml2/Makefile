@@ -60,6 +60,7 @@ configure:
 		--with-zlib=$(STAGEDIR) \
 		--host=$(HOST_TARGET) \
 		--build=$(HOST_BUILD) \
+		ac_cv_have_decl_getentropy=no \
 		ac_cv_func_getentropy=no \
 		ac_cv_func_arc4random=no \
 		ac_cv_func_arc4random_buf=no ; \
