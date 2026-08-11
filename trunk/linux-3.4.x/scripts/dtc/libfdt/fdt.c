@@ -78,15 +78,14 @@ const void *fdt_offset_ptr(const void *fdt, int offset, int len)
 {
 	const char *p;
 
-	if (fdt_version(fdt) >= 0x11)
-		if (((offset + len) < offset)
-		    || ((offset + len) > fdt_size_dt_struct(fdt)))
-			return NULL;
+	if (offset < 0 || len < 0)
+		return NULL;
+
+	if (((offset + len) < offset)
+	    || ((offset + len) > fdt_size_dt_struct(fdt)))
+		return NULL;
 
 	p = _fdt_offset_ptr(fdt, offset);
-
-	if (p + len < p)
-		return NULL;
 	return p;
 }
 
