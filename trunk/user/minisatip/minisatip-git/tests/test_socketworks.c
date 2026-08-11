@@ -135,7 +135,7 @@ int test_socket_writev_prio_flush()
 	if (3 != (rv = read(read_fd, buf, sizeof(buf))))
 		LOG_AND_RETURN(2, "read unexpected number of bytes %d", rv);
 	if (strcmp(buf, "0p2"))
-		LOG_AND_RETURN(2, "unexpected result: 0p1 != %s", buf);
+		LOG_AND_RETURN(2, "unexpected result: 0p2 mismatch");
 	return 0;
 }
 
