@@ -1609,21 +1609,16 @@ static void execute_editor(struct more_control *ctl, char *cmdbuf, size_t buflen
 	 * POSIX: call vi -c n file (when editor is vi or ex).
 	 */
 	if (!strcmp(p, "vi") || !strcmp(p, "ex")) {
-		snprintf(cmdbuf, buflen, "-c %d", n);
+		snprintf(cmdbuf, buflen, "%s -c %d %s", editor, n,
+			 ctl->file_names[ctl->argv_position]);
 		split = 1;
 	} else
-		snprintf(cmdbuf, buflen, "+%d", n);
+		snprintf(cmdbuf, buflen, "%s +%d %s", editor, n,
+			 ctl->file_names[ctl->argv_position]);
 
 	erase_to_col(ctl, 0);
-	printf("%s %s %s", editor, cmdbuf, ctl->file_names[ctl->argv_position]);
-	if (split) {
-		cmdbuf[2] = 0;
-		execute(ctl, filename, editor, editor,
-			cmdbuf, cmdbuf + 3,
-			ctl->file_names[ctl->argv_position], (char *)0);
-	} else
-		execute(ctl, filename, editor, editor,
-			cmdbuf, ctl->file_names[ctl->argv_position], (char *)0);
+	printf("%s", cmdbuf);
+	execute(ctl, filename, "sh", "sh", "-c", cmdbuf, (char *)0);
 }
 
 static int skip_backwards(struct more_control *ctl, int nlines)
