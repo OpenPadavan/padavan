@@ -23,6 +23,7 @@ RUN apt update && \
         fakeroot \
         flex \
         gawk \
+        gcc-multilib \
         gettext \
         git \
         gperf \
