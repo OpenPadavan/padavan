@@ -360,19 +360,23 @@ static inline int fc_ct_ms_fill(struct fc_lport *lport,
 			fc_host_firmware_version(lport->host),
 			FC_FDMI_HBA_ATTR_FIRMWAREVERSION_LEN);
 
-		/* OS Name and Version */
+/* OS Name and Version */
 		entry = (struct fc_fdmi_attr_entry *)((char *)entry->value +
-					FC_FDMI_HBA_ATTR_FIRMWAREVERSION_LEN);
+				FC_FDMI_HBA_ATTR_FIRMWAREVERSION_LEN);
 		len = FC_FDMI_ATTR_ENTRY_HEADER_LEN;
 		len += FC_FDMI_HBA_ATTR_OSNAMEVERSION_LEN;
 		put_unaligned_be16(FC_FDMI_HBA_ATTR_OSNAMEVERSION,
 				   &entry->type);
 		put_unaligned_be16(len, &entry->len);
-		snprintf((char *)&entry->value,
-			FC_FDMI_HBA_ATTR_OSNAMEVERSION_LEN,
-			"%s v%s",
-			init_utsname()->sysname,
-			init_utsname()->release);
+		{
+			char osnamever[FC_FDMI_HBA_ATTR_OSNAMEVERSION_LEN];
+			snprintf(osnamever, sizeof(osnamever),
+				"%s v%s",
+				init_utsname()->sysname,
+				init_utsname()->release);
+			strncpy((char *)&entry->value, osnamever,
+				FC_FDMI_HBA_ATTR_OSNAMEVERSION_LEN);
+		}
 		break;
 	case FC_FDMI_RPA:
 		numattrs = 6;
