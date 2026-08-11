@@ -6,9 +6,9 @@
 #ifndef _WG_MESSAGES_H
 #define _WG_MESSAGES_H
 
-#include <zinc/curve25519.h>
-#include <zinc/chacha20poly1305.h>
-#include <zinc/blake2s.h>
+#include <crypto/curve25519.h>
+#include <crypto/chacha20poly1305.h>
+#include <crypto/blake2s.h>
 
 #include <linux/kernel.h>
 #include <linux/param.h>
@@ -117,13 +117,7 @@ enum message_alignments {
 	MESSAGE_MINIMUM_LENGTH = message_data_len(0)
 };
 
-enum message_size {
-	MESSAGE_INITIATION_SIZE = sizeof(struct message_handshake_initiation),
-	MESSAGE_RESPONSE_SIZE = sizeof(struct message_handshake_response),
-	MESSAGE_COOKIE_REPLY_SIZE = sizeof(struct message_handshake_cookie),
-	MESSAGE_TRANSPORT_SIZE = sizeof(struct message_data),
-	MESSAGE_MAX_SIZE = 65535
-};
+#define SKB_TYPE_LE32(skb) (((struct message_header *)(skb)->data)->type)
 
 #define SKB_HEADER_LEN                                       \
 	(max(sizeof(struct iphdr), sizeof(struct ipv6hdr)) + \

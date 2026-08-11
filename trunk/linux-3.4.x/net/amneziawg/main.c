@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
+ * Copyright (C) 2024 AmneziaVPN <admin@amnezia.org>. All Rights Reserved.
  */
 
 #include "version.h"
@@ -10,21 +11,22 @@
 #include "ratelimiter.h"
 #include "netlink.h"
 #include "uapi/wireguard.h"
-#include "crypto/zinc.h"
 
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/genetlink.h>
+#include <net/genetlink.h>
 #include <net/rtnetlink.h>
 
 static int __init wg_mod_init(void)
 {
 	int ret;
 
+#ifdef COMPAT_INIT_CRYPTO
 	if ((ret = chacha20_mod_init()) || (ret = poly1305_mod_init()) ||
 	    (ret = chacha20poly1305_mod_init()) || (ret = blake2s_mod_init()) ||
 	    (ret = curve25519_mod_init()))
 		return ret;
+#endif
 
 	ret = wg_allowedips_slab_init();
 	if (ret < 0)
@@ -50,8 +52,9 @@ static int __init wg_mod_init(void)
 	if (ret < 0)
 		goto err_netlink;
 
-	pr_info("WireGuard " WIREGUARD_VERSION " (AmneziaWG) loaded. See www.amnezia.org for information.\n");
+	pr_info("AmneziaWG " WIREGUARD_VERSION " loaded. See amnezia.org for information.\n");
 	pr_info("Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.\n");
+	pr_info("Copyright (C) 2024-2025 AmneziaVPN <admin@amnezia.org>. All Rights Reserved.\n");
 
 	return 0;
 
@@ -73,11 +76,14 @@ static void __exit wg_mod_exit(void)
 	wg_allowedips_slab_uninit();
 }
 
+module_param(bogus_endpoints, int, 0600);
+module_param(bogus_endpoints_prefix, charp, 0600);
+module_param(bogus_endpoints_prefix6, charp, 0600);
 module_init(wg_mod_init);
 module_exit(wg_mod_exit);
 MODULE_LICENSE("GPL v2");
-MODULE_DESCRIPTION("WireGuard (AmneziaWG) secure network tunnel");
-MODULE_AUTHOR("Jason A. Donenfeld <Jason@zx2c4.com>");
+MODULE_DESCRIPTION("AmneziaWG secure network tunnel");
+MODULE_AUTHOR("Jason A. Donenfeld <Jason@zx2c4.com>, AmneziaVPN <admin@amnezia.org>");
 MODULE_VERSION(WIREGUARD_VERSION);
 MODULE_ALIAS_RTNL_LINK(KBUILD_MODNAME);
 MODULE_ALIAS_GENL_FAMILY(WG_GENL_NAME);

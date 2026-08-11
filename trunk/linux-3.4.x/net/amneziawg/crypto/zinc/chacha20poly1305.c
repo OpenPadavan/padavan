@@ -107,7 +107,7 @@ bool chacha20poly1305_encrypt_sg_inplace(struct scatterlist *src,
 			simd_context);
 
 #ifdef ISPADAVAN
-	local_irq_save(flags);
+        local_irq_save(flags);
 #endif
 	sg_miter_start(&miter, src, sg_nents(src), SG_MITER_TO_SG | SG_MITER_ATOMIC);
 	for (sl = src_len; sl > 0 && sg_miter_next(&miter); sl -= miter.length) {
@@ -161,7 +161,7 @@ bool chacha20poly1305_encrypt_sg_inplace(struct scatterlist *src,
 
 	sg_miter_stop(&miter);
 #ifdef ISPADAVAN
-	local_irq_restore(flags);
+        local_irq_restore(flags);
 #endif
 
 	if (unlikely(sl > -POLY1305_MAC_SIZE)) {
@@ -246,7 +246,7 @@ bool chacha20poly1305_decrypt_sg_inplace(struct scatterlist *src,
 					 simd_context_t *simd_context)
 {
 #ifdef ISPADAVAN
-	unsigned long flags;
+        unsigned long flags;
 #endif
 	struct poly1305_ctx poly1305_state;
 	struct chacha20_ctx chacha20_state;
@@ -278,7 +278,7 @@ bool chacha20poly1305_decrypt_sg_inplace(struct scatterlist *src,
 			simd_context);
 
 #ifdef ISPADAVAN
-	local_irq_save(flags);
+        local_irq_save(flags);
 #endif
 	sg_miter_start(&miter, src, sg_nents(src), SG_MITER_TO_SG | SG_MITER_ATOMIC);
 	for (sl = src_len; sl > 0 && sg_miter_next(&miter); sl -= miter.length) {
@@ -334,7 +334,7 @@ bool chacha20poly1305_decrypt_sg_inplace(struct scatterlist *src,
 
 	sg_miter_stop(&miter);
 #ifdef ISPADAVAN
-	local_irq_restore(flags);
+        local_irq_restore(flags);
 #endif
 
 	if (unlikely(sl > -POLY1305_MAC_SIZE)) {

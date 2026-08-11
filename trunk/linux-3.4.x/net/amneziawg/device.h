@@ -6,10 +6,13 @@
 #ifndef _WG_DEVICE_H
 #define _WG_DEVICE_H
 
+#include "junk.h"
 #include "noise.h"
 #include "allowedips.h"
 #include "peerlookup.h"
 #include "cookie.h"
+#include "header_protection.h"
+#include "type.h"
 
 #include <linux/types.h>
 #include <linux/netdevice.h>
@@ -37,22 +40,6 @@ struct prev_queue {
 	atomic_t count;
 };
 
-struct amnezia_config {
-	bool advanced_security_enabled;
-	u16 junk_packet_count;
-	u16 junk_packet_min_size;
-	u16 junk_packet_max_size;
-	u16 init_packet_junk_size;
-	u16 response_packet_junk_size;
-	u32 init_packet_magic_header;
-	u32 response_packet_magic_header;
-	u32 cookie_packet_magic_header;
-	u32 transport_packet_magic_header;
-	/* I1 support */
-        u16 i1_len;
-	u8 *i1_bytes; /* kmalloc'ed */
-};
-
 struct wg_device {
 	struct net_device *dev;
 	struct crypt_queue encrypt_queue, decrypt_queue, handshake_queue;
@@ -66,15 +53,20 @@ struct wg_device {
 	struct allowedips peer_allowedips;
 	struct mutex device_update_lock, socket_update_lock;
 	struct list_head device_list, peer_list;
-	struct amnezia_config advanced_security_config;
+	struct header_protection header_protection;
+	struct jp_spec ispecs[5];
+	u32_range_t init_header, resp_header, cookie_header, transport_header;
+	u16_range_t content_padding_addition, max_handshake_attempts;
+	u16_range_t rekey_after_time, rekey_timeout, reject_after_time, keepalive_timeout;
 	atomic_t handshake_queue_len;
 	unsigned int num_peers, device_update_gen;
 	u32 fwmark;
+	u16 init_padding, resp_padding, cookie_padding, transport_padding;
 	u16 incoming_port;
+	u16 jc, jmin, jmax;
 };
 
 int wg_device_init(void);
 void wg_device_uninit(void);
-int wg_device_handle_post_config(struct net_device *dev, struct amnezia_config *asc);
 
 #endif /* _WG_DEVICE_H */

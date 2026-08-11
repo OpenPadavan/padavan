@@ -2,8 +2,6 @@
 #
 # Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
 
-kbuild-dir := $(if $(filter /%,$(src)),$(src),$(srctree)/$(src))
-
 ccflags-y += -include $(kbuild-dir)/compat/compat.h
 asflags-y += -include $(kbuild-dir)/compat/compat-asm.h
 LINUXINCLUDE := -DCOMPAT_VERSION=$(VERSION) -DCOMPAT_PATCHLEVEL=$(PATCHLEVEL) -DCOMPAT_SUBLEVEL=$(SUBLEVEL) -I$(kbuild-dir)/compat/version $(LINUXINCLUDE)
@@ -12,12 +10,12 @@ ifeq ($(wildcard $(srctree)/include/linux/ptr_ring.h),)
 ccflags-y += -I$(kbuild-dir)/compat/ptr_ring/include
 endif
 
-ifeq ($(wildcard $(srctree)/include/linux/hashtable.h),)
-ccflags-y += -I$(kbuild-dir)/compat/hashtable/include
-endif
-
 ifeq ($(wildcard $(srctree)/include/linux/skb_array.h),)
 ccflags-y += -I$(kbuild-dir)/compat/skb_array/include
+endif
+
+ifeq ($(wildcard $(srctree)/include/linux/hashtable.h),)
+ccflags-y += -I$(kbuild-dir)/compat/hashtable/include
 endif
 
 ifeq ($(wildcard $(srctree)/include/linux/siphash.h),)
@@ -46,7 +44,6 @@ ifeq ($(wildcard $(srctree)/include/linux/simd.h),)
 ccflags-y += -I$(kbuild-dir)/compat/simd/include
 endif
 
-
 ifeq ($(wildcard $(srctree)/include/net/ip_tunnels.h),)
 ccflags-y += -I$(kbuild-dir)/compat/ip_tunnel/include
 amneziawg-y += compat/ip_tunnel/ip_tunnel.o
@@ -57,7 +54,7 @@ ccflags-y += -I$(kbuild-dir)/compat/udp_tunnel/include
 amneziawg-y += compat/udp_tunnel/udp_tunnel.o
 endif
 
-ifeq ($(shell grep -s -F "int crypto_memneq" "$(srctree)/include/crypto/algapi.h"),)
+ifeq ($(shell grep -s -F "int crypto_memneq" "$(srctree)/include/crypto/algapi.h")$(shell grep -s -F "int crypto_memneq" "$(srctree)/include/crypto/utils.h"),)
 ccflags-y += -include $(kbuild-dir)/compat/memneq/include.h
 amneziawg-y += compat/memneq/memneq.o
 endif
@@ -118,6 +115,34 @@ endif
 
 ifneq ($(shell grep -s -F "\#define LINUX_PACKAGE_ID \" Debian " "$(CURDIR)/include/generated/package.h"),)
 ccflags-y += -DISDEBIAN
+endif
+
+ifeq ($(wildcard $(srctree)/include/crypto/blake2s.h),)
+ccflags-y += -I$(kbuild-dir)/compat/crypto/blake2s/include
+endif
+
+ifeq ($(wildcard $(srctree)/include/crypto/chacha20poly1305.h),)
+ccflags-y += -I$(kbuild-dir)/compat/crypto/chacha20poly1305/include
+endif
+
+ifeq ($(wildcard $(srctree)/include/crypto/utils.h),)
+ccflags-y += -I$(kbuild-dir)/compat/crypto/utils/include
+endif
+
+ifeq ($(wildcard $(srctree)/include/crypto/curve25519.h),)
+ccflags-y += -I$(kbuild-dir)/compat/crypto/curve25519/include
+endif
+
+ifeq ($(wildcard $(srctree)/include/linux/kstrtox.h),)
+ccflags-y += -I$(kbuild-dir)/compat/kstrtox/include
+endif
+
+ifeq ($(wildcard $(srctree)/include/net/gso.h),)
+ccflags-y += -I$(kbuild-dir)/compat/gso/include
+endif
+
+ifeq ($(wildcard $(srctree)/include/linux/sprintf.h),)
+ccflags-y += -I$(kbuild-dir)/compat/sprintf/include
 endif
 
 ifdef ISPADAVAN

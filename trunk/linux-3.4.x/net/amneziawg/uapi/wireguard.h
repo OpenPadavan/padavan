@@ -101,6 +101,10 @@
  *                    WGALLOWEDIP_A_FAMILY: NLA_U16
  *                    WGALLOWEDIP_A_IPADDR: struct in_addr or struct in6_addr
  *                    WGALLOWEDIP_A_CIDR_MASK: NLA_U8
+ *                    WGALLOWEDIP_A_FLAGS: NLA_U32, WGALLOWEDIP_F_REMOVE_ME if
+ *                                         the specified IP should be removed;
+ *                                         otherwise, this IP will be added if
+ *                                         it is not already present.
  *                0: NLA_NESTED
  *                    ...
  *                0: NLA_NESTED
@@ -111,6 +115,9 @@
  *                                       most recent protocol will be used when
  *                                       this is unset. Otherwise, must be set
  *                                       to 1.
+ *            WGPEER_A_ADVANCED_SECURITY: flag indicating that advanced security
+ *                                       techniques provided by AmneziaWG should
+ *                                       be used.
  *        0: NLA_NESTED
  *            ...
  *        ...
@@ -126,19 +133,41 @@
  * of a peer, it likely should not be specified in subsequent fragments.
  *
  * If an error occurs, NLMSG_ERROR will reply containing an errno.
+ *
+ * WG_CMD_UNKNOWN_PEER
+ * ----------------------
+ *
+ * This command is sent on the multicast group WG_MULTICAST_GROUP_AUTH
+ * when the initiation message received from a peer with an unknown public
+ * key.
+ * The kernel will send a single message containing the
+ * following tree of nested items:
+ *
+ *    WGDEVICE_A_IFINDEX: NLA_U32
+ *    WGDEVICE_A_IFNAME: NLA_NUL_STRING, maxlen IFNAMSIZ - 1
+ *    WGDEVICE_A_PEER: NLA_NESTED
+ *        WGPEER_A_PUBLIC_KEY: NLA_EXACT_LEN, len WG_KEY_LEN
+ *        WGPEER_A_ENDPOINT: NLA_MIN_LEN(struct sockaddr), struct sockaddr_in or struct sockaddr_in6
+ *        WGPEER_A_ADVANCED_SECURITY: flag indicating that advanced security
+ *                                    techniques provided by AmneziaWG should
+ *                                    be used.
+ *
  */
 
 #ifndef _WG_UAPI_WIREGUARD_H
 #define _WG_UAPI_WIREGUARD_H
 
 #define WG_GENL_NAME "amneziawg"
-#define WG_GENL_VERSION 1
+#define WG_GENL_VERSION 3
 
 #define WG_KEY_LEN 32
+
+#define WG_MULTICAST_GROUP_AUTH "auth"
 
 enum wg_cmd {
 	WG_CMD_GET_DEVICE,
 	WG_CMD_SET_DEVICE,
+	WG_CMD_UNKNOWN_PEER,
 	__WG_CMD_MAX
 };
 #define WG_CMD_MAX (__WG_CMD_MAX - 1)
@@ -166,7 +195,21 @@ enum wgdevice_attribute {
 	WGDEVICE_A_H2,
 	WGDEVICE_A_H3,
 	WGDEVICE_A_H4,
+	WGDEVICE_A_PEER,
+	WGDEVICE_A_S3,
+	WGDEVICE_A_S4,
 	WGDEVICE_A_I1,
+	WGDEVICE_A_I2,
+	WGDEVICE_A_I3,
+	WGDEVICE_A_I4,
+	WGDEVICE_A_I5,
+	WGDEVICE_A_HEADER_PROTECTION_KEY,
+	WGDEVICE_A_CONTENT_PADDING_ADDITION,
+	WGDEVICE_A_REKEY_AFTER_TIME,
+	WGDEVICE_A_REKEY_TIMEOUT,
+	WGDEVICE_A_REJECT_AFTER_TIME,
+	WGDEVICE_A_KEEPALIVE_TIMEOUT,
+	WGDEVICE_A_MAX_HANDSHAKE_ATTEMPTS,
 	__WGDEVICE_A_LAST
 };
 #define WGDEVICE_A_MAX (__WGDEVICE_A_LAST - 1)
@@ -175,8 +218,9 @@ enum wgpeer_flag {
 	WGPEER_F_REMOVE_ME = 1U << 0,
 	WGPEER_F_REPLACE_ALLOWEDIPS = 1U << 1,
 	WGPEER_F_UPDATE_ONLY = 1U << 2,
+	WGPEER_F_HAS_ADVANCED_SECURITY = 1U << 3,
 	__WGPEER_F_ALL = WGPEER_F_REMOVE_ME | WGPEER_F_REPLACE_ALLOWEDIPS |
-			 WGPEER_F_UPDATE_ONLY
+			 WGPEER_F_UPDATE_ONLY | WGPEER_F_HAS_ADVANCED_SECURITY
 };
 enum wgpeer_attribute {
 	WGPEER_A_UNSPEC,
@@ -190,15 +234,21 @@ enum wgpeer_attribute {
 	WGPEER_A_TX_BYTES,
 	WGPEER_A_ALLOWEDIPS,
 	WGPEER_A_PROTOCOL_VERSION,
+	WGPEER_A_ADVANCED_SECURITY,
 	__WGPEER_A_LAST
 };
 #define WGPEER_A_MAX (__WGPEER_A_LAST - 1)
 
+enum wgallowedip_flag {
+	WGALLOWEDIP_F_REMOVE_ME = 1U << 0,
+	__WGALLOWEDIP_F_ALL = WGALLOWEDIP_F_REMOVE_ME
+};
 enum wgallowedip_attribute {
 	WGALLOWEDIP_A_UNSPEC,
 	WGALLOWEDIP_A_FAMILY,
 	WGALLOWEDIP_A_IPADDR,
 	WGALLOWEDIP_A_CIDR_MASK,
+	WGALLOWEDIP_A_FLAGS,
 	__WGALLOWEDIP_A_LAST
 };
 #define WGALLOWEDIP_A_MAX (__WGALLOWEDIP_A_LAST - 1)

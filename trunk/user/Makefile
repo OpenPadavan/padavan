@@ -126,8 +126,14 @@ dir_$(CONFIG_FIRMWARE_INCLUDE_MINISATIP)	+= minisatip
 dir_$(CONFIG_FIRMWARE_INCLUDE_VLMCSD)		+= vlmcsd
 dir_$(CONFIG_FIRMWARE_INCLUDE_IPERF3)		+= iperf3
 dir_$(CONFIG_FIRMWARE_INCLUDE_MT7621_CPUFREQ)	+= mt7621_cpufreq
-dir_$(SAMBA_ENABLED)				+= samba36
-dir_$(SAMBA_ENABLED)				+= wsdd2
+ifeq ($(SAMBA_ENABLED),y)
+ifeq ($(CONFIG_FIRMWARE_INCLUDE_SMBD36),y)
+dir_y						+= samba36
+dir_y						+= wsdd2
+else
+dir_y						+= samba3
+endif
+endif
 dir_$(CONFIG_FIRMWARE_INCLUDE_SOCAT)		+= socat
 dir_$(CONFIG_FIRMWARE_INCLUDE_NDISC6_RDISC6)	+= ndisc6
 
@@ -137,6 +143,8 @@ dir_$(CONFIG_FIRMWARE_INCLUDE_DNSCRYPT)		+= dnscrypt-proxy
 dir_$(CONFIG_FIRMWARE_INCLUDE_STUBBY)		+= stubby
 dir_$(CONFIG_FIRMWARE_INCLUDE_DOH)		+= doh_proxy
 dir_$(CONFIG_FIRMWARE_INCLUDE_OBFS4)            += obfs4
+dir_$(CONFIG_FIRMWARE_INCLUDE_ZEROTIER)		+= zerotier
+dir_$(CONFIG_FIRMWARE_INCLUDE_REDSOCKS2)	+= redsocks
 ifneq (,$(filter y,$(CONFIG_FIRMWARE_INCLUDE_XUPNPD) $(CONFIG_FIRMWARE_INCLUDE_LUA)))
 dir_y						+= lua
 dir_$(CONFIG_FIRMWARE_INCLUDE_XUPNPD)           += xupnpd
@@ -171,6 +179,7 @@ dir_$(FS_NTFS_ENABLED)				+= ntfs-3g
 dir_$(CONFIG_FIRMWARE_INCLUDE_PARTED)		+= parted
 dir_$(CONFIG_FIRMWARE_INCLUDE_FTPD)		+= vsftpd
 dir_$(CONFIG_FIRMWARE_INCLUDE_MINIDLNA)		+= minidlna
+dir_$(CONFIG_FIRMWARE_INCLUDE_FIREFLY)		+= firefly
 dir_$(CONFIG_FIRMWARE_INCLUDE_TRANSMISSION)	+= transmission
 dir_$(CONFIG_FIRMWARE_INCLUDE_ARIA)		+= aria2
 endif

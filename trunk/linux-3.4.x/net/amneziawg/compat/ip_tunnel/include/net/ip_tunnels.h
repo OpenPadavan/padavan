@@ -126,8 +126,10 @@ static inline u8 ip_tunnel_get_dsfield(const struct iphdr *iph,
 {
 	if (skb->protocol == htons(ETH_P_IP))
 		return iph->tos;
+#if IS_ENABLED(CONFIG_IPV6)
 	else if (skb->protocol == htons(ETH_P_IPV6))
 		return ipv6_get_dsfield((const struct ipv6hdr *)iph);
+#endif
 	else
 		return 0;
 }

@@ -9,13 +9,15 @@
 #include "messages.h"
 #include "queueing.h"
 #include "peerlookup.h"
+#include "netlink.h"
+#include "socket.h"
 
 #include <linux/rcupdate.h>
 #include <linux/slab.h>
 #include <linux/bitmap.h>
 #include <linux/scatterlist.h>
 #include <linux/highmem.h>
-#include <crypto/algapi.h>
+#include <crypto/utils.h>
 
 /* This implements Noise_IKpsk2:
  *
@@ -25,8 +27,8 @@
  * <- e, ee, se, psk, {}
  */
 
-static const u8 handshake_name[37] = "Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s";
-static const u8 identifier_name[34] = "WireGuard v1 zx2c4 Jason@zx2c4.com";
+static const u8 handshake_name[37] __nonstring = "Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s";
+static const u8 identifier_name[34] __nonstring = "WireGuard v1 zx2c4 Jason@zx2c4.com";
 static u8 handshake_init_hash[NOISE_HASH_LEN] __ro_after_init;
 static u8 handshake_init_chaining_key[NOISE_HASH_LEN] __ro_after_init;
 static atomic64_t keypair_counter = ATOMIC64_INIT(0);
@@ -181,7 +183,7 @@ void wg_noise_expire_current_peer_keypairs(struct wg_peer *peer)
 	struct noise_keypair *keypair;
 
 	wg_noise_handshake_clear(&peer->handshake);
-	wg_noise_reset_last_sent_handshake(&peer->last_sent_handshake);
+	wg_peer_reset_last_sent_handshake(peer);
 
 	spin_lock_bh(&peer->keypairs.keypair_update_lock);
 	keypair = rcu_dereference_protected(peer->keypairs.next_keypair,
@@ -302,6 +304,41 @@ void wg_noise_set_static_identity_private_key(
 		static_identity->static_public, private_key);
 }
 
+static void hmac(u8 *out, const u8 *in, const u8 *key, const size_t inlen, const size_t keylen)
+{
+	struct blake2s_state state;
+	u8 x_key[BLAKE2S_BLOCK_SIZE] __aligned(__alignof__(u32)) = { 0 };
+	u8 i_hash[BLAKE2S_HASH_SIZE] __aligned(__alignof__(u32));
+	int i;
+
+	if (keylen > BLAKE2S_BLOCK_SIZE) {
+		blake2s_init(&state, BLAKE2S_HASH_SIZE);
+		blake2s_update(&state, key, keylen);
+		blake2s_final(&state, x_key);
+	} else
+		memcpy(x_key, key, keylen);
+
+	for (i = 0; i < BLAKE2S_BLOCK_SIZE; ++i)
+		x_key[i] ^= 0x36;
+
+	blake2s_init(&state, BLAKE2S_HASH_SIZE);
+	blake2s_update(&state, x_key, BLAKE2S_BLOCK_SIZE);
+	blake2s_update(&state, in, inlen);
+	blake2s_final(&state, i_hash);
+
+	for (i = 0; i < BLAKE2S_BLOCK_SIZE; ++i)
+		x_key[i] ^= 0x5c ^ 0x36;
+
+	blake2s_init(&state, BLAKE2S_HASH_SIZE);
+	blake2s_update(&state, x_key, BLAKE2S_BLOCK_SIZE);
+	blake2s_update(&state, i_hash, BLAKE2S_HASH_SIZE);
+	blake2s_final(&state, i_hash);
+
+	memcpy(out, i_hash, BLAKE2S_HASH_SIZE);
+	memzero_explicit(x_key, BLAKE2S_BLOCK_SIZE);
+	memzero_explicit(i_hash, BLAKE2S_HASH_SIZE);
+}
+
 /* This is Hugo Krawczyk's HKDF:
  *  - https://eprint.iacr.org/2010/264.pdf
  *  - https://tools.ietf.org/html/rfc5869
@@ -322,16 +359,14 @@ static void kdf(u8 *first_dst, u8 *second_dst, u8 *third_dst, const u8 *data,
 		 ((third_len || third_dst) && (!second_len || !second_dst))));
 
 	/* Extract entropy from data into secret */
-	blake2s_hmac(secret, data, chaining_key, BLAKE2S_HASH_SIZE, data_len,
-		     NOISE_HASH_LEN);
+	hmac(secret, data, chaining_key, data_len, NOISE_HASH_LEN);
 
 	if (!first_dst || !first_len)
 		goto out;
 
 	/* Expand first key: key = secret, data = 0x1 */
 	output[0] = 1;
-	blake2s_hmac(output, output, secret, BLAKE2S_HASH_SIZE, 1,
-		     BLAKE2S_HASH_SIZE);
+	hmac(output, output, secret, 1, BLAKE2S_HASH_SIZE);
 	memcpy(first_dst, output, first_len);
 
 	if (!second_dst || !second_len)
@@ -339,8 +374,7 @@ static void kdf(u8 *first_dst, u8 *second_dst, u8 *third_dst, const u8 *data,
 
 	/* Expand second key: key = secret, data = first-key || 0x2 */
 	output[BLAKE2S_HASH_SIZE] = 2;
-	blake2s_hmac(output, output, secret, BLAKE2S_HASH_SIZE,
-		     BLAKE2S_HASH_SIZE + 1, BLAKE2S_HASH_SIZE);
+	hmac(output, output, secret, BLAKE2S_HASH_SIZE + 1, BLAKE2S_HASH_SIZE);
 	memcpy(second_dst, output, second_len);
 
 	if (!third_dst || !third_len)
@@ -348,8 +382,7 @@ static void kdf(u8 *first_dst, u8 *second_dst, u8 *third_dst, const u8 *data,
 
 	/* Expand third key: key = secret, data = second-key || 0x3 */
 	output[BLAKE2S_HASH_SIZE] = 3;
-	blake2s_hmac(output, output, secret, BLAKE2S_HASH_SIZE,
-		     BLAKE2S_HASH_SIZE + 1, BLAKE2S_HASH_SIZE);
+	hmac(output, output, secret, BLAKE2S_HASH_SIZE + 1, BLAKE2S_HASH_SIZE);
 	memcpy(third_dst, output, third_len);
 
 out:
@@ -551,10 +584,11 @@ out:
 
 struct wg_peer *
 wg_noise_handshake_consume_initiation(struct message_handshake_initiation *src,
-				      struct wg_device *wg)
+				      struct wg_device *wg, struct sk_buff *skb)
 {
 	struct wg_peer *peer = NULL, *ret_peer = NULL;
 	struct noise_handshake *handshake;
+	struct endpoint *endpoint = kzalloc(sizeof(*endpoint), GFP_KERNEL);
 	bool replay_attack, flood_attack;
 	u8 key[NOISE_SYMMETRIC_KEY_LEN];
 	u8 chaining_key[NOISE_HASH_LEN];
@@ -584,8 +618,14 @@ wg_noise_handshake_consume_initiation(struct message_handshake_initiation *src,
 
 	/* Lookup which peer we're actually talking to */
 	peer = wg_pubkey_hashtable_lookup(wg->peer_hashtable, s);
-	if (!peer)
+	if (!peer) {
+		if (unlikely(wg_socket_endpoint_from_skb(endpoint, skb)))
+			goto out;
+
+		net_dbg_skb_ratelimited("%s: unknown peer from %pISpfsc\n", wg->dev->name, skb);
+		wg_genl_mcast_peer_unknown(wg, s, endpoint);
 		goto out;
+	}
 	handshake = &peer->handshake;
 
 	/* ss */
@@ -628,6 +668,9 @@ out:
 	memzero_explicit(hash, NOISE_HASH_LEN);
 	memzero_explicit(chaining_key, NOISE_HASH_LEN);
 	up_read(&wg->static_identity.lock);
+
+	kfree(endpoint);
+
 	if (!ret_peer)
 		wg_peer_put(peer);
 	return ret_peer;

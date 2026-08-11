@@ -19,9 +19,8 @@
 #define ISRHEL7
 #elif RHEL_MAJOR == 8
 #define ISRHEL8
-#if RHEL_MINOR >= 6
-#define ISCENTOS8S
-#endif
+#elif RHEL_MAJOR == 9
+#define ISRHEL9
 #endif
 #endif
 #ifdef UTS_UBUNTU_RELEASE_ABI
@@ -33,6 +32,8 @@
 #define ISUBUNTU1904
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)
 #define ISUBUNTU1910
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+#define ISUBUNTU2204
 #endif
 #endif
 
@@ -40,10 +41,6 @@
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
 #error "WireGuard requires Linux >= 3.10"
 #endif
-#endif
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
-#error "WireGuard has been merged into Linux >= 5.6 and therefore this compatibility module is no longer required."
 #endif
 
 #if defined(ISRHEL7)
@@ -153,8 +150,12 @@ static inline u32 __compat_get_random_u32(void)
 #else
 	get_random_once(&key, sizeof(key));
 #endif
+#if defined(ISPADAVAN)
 	get_random_bytes(&r, sizeof(r));
 	return siphash_2u32(counter++, r, &key);
+#else
+	return siphash_2u32(counter++, get_random_int(), &key);
+#endif
 }
 #define get_random_u32 __compat_get_random_u32
 #endif
@@ -563,7 +564,7 @@ static inline void *__compat_kvcalloc(size_t n, size_t size, gfp_t flags)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
-#define wg_newlink(a,b,c,d,e) wg_newlink(a,b,c,d)
+#define wg_newlink_old(a,b,c,d,e) wg_newlink_old(a,b,c,d)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0)
@@ -832,15 +833,15 @@ struct __kernel_timespec {
 #define MODULE_ALIAS_GENL_FAMILY(family) MODULE_ALIAS_NET_PF_PROTO_NAME(PF_NETLINK, NETLINK_GENERIC, "-family-" family)
 //#include <net/flow_keys.h>
 static inline void skb_probe_transport_header(struct sk_buff *skb,
-					      const int offset_hint)
+                                              const int offset_hint)
 {
-//	struct flow_keys keys;
-	if (skb->ip_summed == CHECKSUM_PARTIAL)
-	    skb_set_transport_header(skb, skb_checksum_start_offset(skb));
-//	else if (skb_flow_dissect(skb, &keys))
-//	    skb_set_transport_header(skb, keys.thoff);
-	else
-	    skb_set_transport_header(skb, offset_hint);
+//      struct flow_keys keys;
+        if (skb->ip_summed == CHECKSUM_PARTIAL)
+            skb_set_transport_header(skb, skb_checksum_start_offset(skb));
+//      else if (skb_flow_dissect(skb, &keys))
+//          skb_set_transport_header(skb, keys.thoff);
+        else
+            skb_set_transport_header(skb, offset_hint);
 
 }
 #endif
@@ -915,7 +916,7 @@ static inline void skb_mark_not_on_list(struct sk_buff *skb)
 #endif
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0) && !defined(ISRHEL8)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0) && !defined(ISRHEL8) && !defined(ISRHEL9)
 #define genl_dumpit_info(cb) ({ \
 	struct { struct nlattr **attrs; } *a = (void *)((u8 *)cb->args + offsetofend(struct dump_ctx, next_allowedip)); \
 	BUILD_BUG_ON(sizeof(cb->args) < offsetofend(struct dump_ctx, next_allowedip) + sizeof(*a)); \
@@ -935,13 +936,14 @@ static inline void skb_mark_not_on_list(struct sk_buff *skb)
 #endif
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 200) || (LINUX_VERSION_CODE < KERNEL_VERSION(4, 20, 0) && LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 249)) || (LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0) && LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 285)) || (LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) && LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 320))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 200) || (LINUX_VERSION_CODE < KERNEL_VERSION(4, 20, 0) && LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 249)) || (LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0) && LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 285)) || (LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) && LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 320))) && LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+#define COMPAT_INIT_CRYPTO
 #define blake2s_init zinc_blake2s_init
 #define blake2s_init_key zinc_blake2s_init_key
 #define blake2s_update zinc_blake2s_update
 #define blake2s_final zinc_blake2s_final
 #endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 5, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 5, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
 #define blake2s_hmac zinc_blake2s_hmac
 #define chacha20 zinc_chacha20
 #define hchacha20 zinc_hchacha20
@@ -984,6 +986,13 @@ static inline void skb_mark_not_on_list(struct sk_buff *skb)
 #define chacha20_arm zinc_chacha20_arm
 #define hchacha20_arm zinc_hchacha20_arm
 #define chacha20_neon zinc_chacha20_neon
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+#define COMPAT_CRYPTO_IS_ZINC
+#define COMPAT_MAYBE_SIMD_CONTEXT(ctx) , ctx
+#else
+#define COMPAT_MAYBE_SIMD_CONTEXT(ctx)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0) && !defined(ISRHEL7)
@@ -1041,7 +1050,6 @@ static inline void __compat_icmp_ndo_send(struct sk_buff *skb_in, int type, int 
 out:
 	consume_skb(cloned_skb);
 }
-
 #if IS_ENABLED(CONFIG_IPV6)
 static inline void __compat_icmpv6_ndo_send(struct sk_buff *skb_in, u8 type, u8 code, __u32 info)
 {
@@ -1137,10 +1145,12 @@ static inline __be16 ip_tunnel_parse_protocol(const struct sk_buff *skb)
 	    (skb_network_header(skb) + sizeof(struct iphdr)) <= skb_tail_pointer(skb) &&
 	    ip_hdr(skb)->version == 4)
 		return htons(ETH_P_IP);
+#if IS_ENABLED(CONFIG_IPV6)
 	if (skb_network_header(skb) >= skb->head &&
 	    (skb_network_header(skb) + sizeof(struct ipv6hdr)) <= skb_tail_pointer(skb) &&
 	    ipv6_hdr(skb)->version == 6)
 		return htons(ETH_P_IPV6);
+#endif
 	return 0;
 }
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0) || defined(ISRHEL8)
@@ -1171,7 +1181,8 @@ static const struct header_ops ip_tunnel_header_ops = { .parse_protocol = ip_tun
 #endif
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 30)
+#define COMPAT_HAS_DEFINED_DST_CACHE_PCPU
 #include <net/dst_cache.h>
 struct dst_cache_pcpu {
 	unsigned long refresh_ts;
@@ -1182,7 +1193,12 @@ struct dst_cache_pcpu {
 		struct in6_addr in6_saddr;
 	};
 };
-#define COMPAT_HAS_DEFINED_DST_CACHE_PCPU
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0) && \
+    !(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 7) && LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)) && \
+    !(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 84) && LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)) && \
+    !defined(ISRHEL9)
 static inline void dst_cache_reset_now(struct dst_cache *dst_cache)
 {
 	int i;
@@ -1246,6 +1262,193 @@ static inline void dst_cache_reset_now(struct dst_cache *dst_cache)
 #define from_timer(var, callback_timer, timer_fieldname) container_of((struct timer_list *)callback_timer, typeof(*var), timer_fieldname)
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0) && \
+    !(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 121) && LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0))
+#include <net/flow.h>
+#define flowi4_to_flowi_common(fl4) flowi4_to_flowi(fl4)
+#define flowi6_to_flowi_common(fl4) flowi6_to_flowi(fl4)
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && !defined(ISRHEL9)
+#define genl_info_dump(cb) genl_dumpit_info(cb)
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 84) && \
+	!(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 312) && LINUX_VERSION_CODE < KERNEL_VERSION(4, 20, 0)) && \
+	!(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 274) && LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0)) && \
+	!(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 215) && LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)) && \
+	!(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 154) && LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0))
+#define timer_delete_sync(timer) del_timer_sync(timer)
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 4) && !defined(ISRHEL9)
+#include <linux/random.h>
+static inline u32 get_random_u32_below(u32 ceil)
+{
+	return get_random_u32() % ceil;
+}
+static inline u32 get_random_u32_inclusive(u32 floor, u32 ceil)
+{
+	return floor + get_random_u32_below(ceil - floor + 1);
+}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0) && !defined(ISRHEL9)
+#define COMPAT_NETIF_HAS_WEIGHT
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#define COMPAT_GENL_HAS_RESV_START_OP
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 2) && \
+	!(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 296) && LINUX_VERSION_CODE < KERNEL_VERSION(4, 20, 0)) && \
+	!(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 229) && LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0)) && \
+	!(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 163) && LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)) && \
+	!(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 86) && LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0))
+#undef DEV_STATS_INC
+#define DEV_STATS_INC(DEV, FIELD) ++DEV->stats.FIELD
+#undef DEV_STATS_ADD
+#define DEV_STATS_ADD(DEV, FIELD, VAL) DEV->stats.FIELD += VAL
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0) && !defined(ISRHEL9)
+#define COMPAT_SKB_HAS_SKB_START
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
+#define dev_get_tstats64 ip_tunnel_get_stats64
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0) || defined(ISRHEL9)
+#define COMPAT_NETDEV_HAS_LLTX_PARAM
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0)
+#include <linux/if.h>
+#include <linux/if_tunnel.h>
+static inline void dev_sw_netstats_rx_add(struct net_device *dev, unsigned int len) {
+	struct pcpu_sw_netstats *tstats = get_cpu_ptr(dev->tstats);
+
+	u64_stats_update_begin(&tstats->syncp);
+	++tstats->rx_packets;
+	tstats->rx_bytes += len;
+	u64_stats_update_end(&tstats->syncp);
+	put_cpu_ptr(tstats);
+}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 91) && !defined(ISUBUNTU2204) && !defined(ISRHEL9)
+#include <linux/timer.h>
+static inline int timer_delete(struct timer_list *timer)
+{
+	return del_timer(timer);
+}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
+#define timer_container_of from_timer
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
+#include <linux/in6.h>
+struct sockaddr_inet {
+	unsigned short	sa_family;
+	char		sa_data[sizeof(struct sockaddr_in6) -
+				sizeof(unsigned short)];
+};
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
+#include <linux/netdevice.h>
+static inline void netif_threaded_enable(struct net_device *dev) { }
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
+#undef CONFIG_PM_USERSPACE_AUTOSLEEP
+#define CONFIG_PM_USERSPACE_AUTOSLEEP CONFIG_ANDROID
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0)
+#define COMPAT_CANNOT_USE_PCPU_STAT_TYPE
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+#define COMPAT_CANNOT_USE_RTNL_NEWLINK_PARAMS
+struct rtnl_newlink_params {
+	struct net *src_net;
+	struct net *link_net;
+	struct net *peer_net;
+	struct nlattr **tb;
+	struct nlattr **data;
+};
+static inline struct net *rtnl_newlink_link_net(struct rtnl_newlink_params *p)
+{
+	return p->link_net ? : p->src_net;
+}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0) && !defined(ISRHEL9)
+#include <linux/notifier.h>
+static inline int register_random_vmfork_notifier(struct notifier_block *nb) { return 0; }
+static inline int unregister_random_vmfork_notifier(struct notifier_block *nb) { return 0; }
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 19, 0) && !defined(ISRHEL9)
+#include <linux/netdevice.h>
+static inline void netif_set_tso_max_size(struct net_device *dev, unsigned int size) {}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 20, 0)
+#define __nonstring
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
+static inline bool skb_queue_empty_lockless(const struct sk_buff_head *list)
+{
+	return READ_ONCE(list->next) == (const struct sk_buff *) list;
+}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+#define NLA_POLICY_MASK(tp, _mask) { .type = tp }
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 14, 0)
+static inline char *nla_strdup(const struct nlattr *nla, gfp_t flags)
+{
+	size_t srclen = nla_len(nla);
+	char *src = nla_data(nla), *dst;
+
+	if (srclen > 0 && src[srclen - 1] == '\0')
+		srclen--;
+
+	dst = kmalloc(srclen + 1, flags);
+	if (dst != NULL) {
+		memcpy(dst, src, srclen);
+		dst[srclen] = '\0';
+	}
+	return dst;
+}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0)
+#include <linux/time.h>
+#define ktime_get_real_seconds get_seconds
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
+#include <asm/unaligned.h>
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
+#define genlmsg_multicast_netns(a, b, c, d, e, f) genlmsg_multicast_netns(b, c, d, e, f)
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
+#define COMPAT_CANNOT_USE_NETLINK_MCGRPS
+#endif
+
 #if defined(ISPADAVAN)
 #include <net/inet_ecn.h>
 /*
@@ -1273,65 +1476,67 @@ static inline void dst_cache_reset_now(struct dst_cache *dst_cache)
  *          2 if packet should be dropped
  */
 static inline int INET_ECN_decapsulate(struct sk_buff *skb,
-				       __u8 outer, __u8 inner)
+                                       __u8 outer, __u8 inner)
 {
-	if (INET_ECN_is_not_ect(inner)) {
-		switch (outer & INET_ECN_MASK) {
-		case INET_ECN_NOT_ECT:
-			return 0;
-		case INET_ECN_ECT_0:
-		case INET_ECN_ECT_1:
-			return 1;
-		case INET_ECN_CE:
-			return 2;
-		}
-	}
+        if (INET_ECN_is_not_ect(inner)) {
+                switch (outer & INET_ECN_MASK) {
+                case INET_ECN_NOT_ECT:
+                        return 0;
+                case INET_ECN_ECT_0:
+                case INET_ECN_ECT_1:
+                        return 1;
+                case INET_ECN_CE:
+                        return 2;
+                }
+        }
 
-	if (INET_ECN_is_ce(outer))
-		INET_ECN_set_ce(skb);
+        if (INET_ECN_is_ce(outer))
+                INET_ECN_set_ce(skb);
 
-	return 0;
+        return 0;
 }
 
 static inline int IP_ECN_decapsulate(const struct iphdr *oiph,
-				     struct sk_buff *skb)
+                                     struct sk_buff *skb)
 {
-	__u8 inner;
+        __u8 inner;
 
-	if (skb->protocol == htons(ETH_P_IP))
-		inner = ip_hdr(skb)->tos;
-	else if (skb->protocol == htons(ETH_P_IPV6))
-		inner = ipv6_get_dsfield(ipv6_hdr(skb));
-	else
-		return 0;
+        if (skb->protocol == htons(ETH_P_IP))
+                inner = ip_hdr(skb)->tos;
+#if IS_ENABLED(CONFIG_IPV6)
+        else if (skb->protocol == htons(ETH_P_IPV6))
+                inner = ipv6_get_dsfield(ipv6_hdr(skb));
+#endif
+        else
+                return 0;
 
-	return INET_ECN_decapsulate(skb, oiph->tos, inner);
+        return INET_ECN_decapsulate(skb, oiph->tos, inner);
 }
 
 static inline bool __ipv6_addr_needs_scope_id(int type)
 {
-	return type & IPV6_ADDR_LINKLOCAL ||
-	       (type & IPV6_ADDR_MULTICAST &&
-		(type & (IPV6_ADDR_LOOPBACK|IPV6_ADDR_LINKLOCAL)));
+        return type & IPV6_ADDR_LINKLOCAL ||
+               (type & IPV6_ADDR_MULTICAST &&
+                (type & (IPV6_ADDR_LOOPBACK|IPV6_ADDR_LINKLOCAL)));
 }
 
 static inline __u32 ipv6_iface_scope_id(const struct in6_addr *addr, int iface)
 {
-	return __ipv6_addr_needs_scope_id(__ipv6_addr_type(addr)) ? iface : 0;
+        return __ipv6_addr_needs_scope_id(__ipv6_addr_type(addr)) ? iface : 0;
 }
 
 static inline int sg_nents(struct scatterlist *sg)
 {
-	int nents;
-	for (nents = 0; sg; sg = sg_next(sg))
-		nents++;
-	return nents;
+        int nents;
+        for (nents = 0; sg; sg = sg_next(sg))
+                nents++;
+        return nents;
 }
 
 static inline void ip6_flow_hdr(struct ipv6hdr *hdr, unsigned int tclass,
-				__be32 flowlabel)
+                                __be32 flowlabel)
 {
-	*(__be32 *)hdr = htonl(0x60000000 | (tclass << 20)) | flowlabel;
+        *(__be32 *)hdr = htonl(0x60000000 | (tclass << 20)) | flowlabel;
 }
 
 #endif
@@ -1343,49 +1548,78 @@ static inline void ip6_flow_hdr(struct ipv6hdr *hdr, unsigned int tclass,
 #undef hlist_for_each_entry_rcu_bh
 
 #define hlist_entry_safe(ptr, type, member) \
-	({ typeof(ptr) ____ptr = (ptr); \
-	   ____ptr ? hlist_entry(____ptr, type, member) : NULL; \
-	})
+        ({ typeof(ptr) ____ptr = (ptr); \
+           ____ptr ? hlist_entry(____ptr, type, member) : NULL; \
+        })
 
-#define hlist_for_each_entry(pos, head, member)				\
-	for (pos = hlist_entry_safe((head)->first, typeof(*(pos)), member);\
-	     pos;							\
-	     pos = hlist_entry_safe((pos)->member.next, typeof(*(pos)), member))
+#define hlist_for_each_entry(pos, head, member)                         \
+        for (pos = hlist_entry_safe((head)->first, typeof(*(pos)), member);\
+             pos;                                                       \
+             pos = hlist_entry_safe((pos)->member.next, typeof(*(pos)), member))
 
-#define hlist_for_each_entry_rcu(pos, head, member)			\
-	for (pos = hlist_entry_safe (rcu_dereference_raw(hlist_first_rcu(head)),\
-			typeof(*(pos)), member);			\
-		pos;							\
-		pos = hlist_entry_safe(rcu_dereference_raw(hlist_next_rcu(\
-			&(pos)->member)), typeof(*(pos)), member))
+#define hlist_for_each_entry_rcu(pos, head, member)                     \
+        for (pos = hlist_entry_safe (rcu_dereference_raw(hlist_first_rcu(head)),\
+                        typeof(*(pos)), member);                        \
+                pos;                                                    \
+                pos = hlist_entry_safe(rcu_dereference_raw(hlist_next_rcu(\
+                        &(pos)->member)), typeof(*(pos)), member))
 
 /**
  * hlist_for_each_entry_safe - iterate over list of given type safe against removal of list entry
- * @pos:	the type * to use as a loop cursor.
- * @n:		another &struct hlist_node to use as temporary storage
- * @head:	the head for your list.
- * @member:	the name of the hlist_node within the struct.
+ * @pos:        the type * to use as a loop cursor.
+ * @n:          another &struct hlist_node to use as temporary storage
+ * @head:       the head for your list.
+ * @member:     the name of the hlist_node within the struct.
  */
-#define hlist_for_each_entry_safe(pos, n, head, member) 		\
-	for (pos = hlist_entry_safe((head)->first, typeof(*pos), member);\
-	     pos && ({ n = pos->member.next; 1; });			\
-	     pos = hlist_entry_safe(n, typeof(*pos), member))
+#define hlist_for_each_entry_safe(pos, n, head, member)                 \
+        for (pos = hlist_entry_safe((head)->first, typeof(*pos), member);\
+             pos && ({ n = pos->member.next; 1; });                     \
+             pos = hlist_entry_safe(n, typeof(*pos), member))
 
 
-#define hlist_for_each_entry_rcu_bh(pos, head, member)			\
-	for (pos = hlist_entry_safe(rcu_dereference_bh(hlist_first_rcu(head)),\
-			typeof(*(pos)), member);			\
-		pos;							\
-		pos = hlist_entry_safe(rcu_dereference_bh(hlist_next_rcu(\
-			&(pos)->member)), typeof(*(pos)), member))
+#define hlist_for_each_entry_rcu_bh(pos, head, member)                  \
+        for (pos = hlist_entry_safe(rcu_dereference_bh(hlist_first_rcu(head)),\
+                        typeof(*(pos)), member);                        \
+                pos;                                                    \
+                pos = hlist_entry_safe(rcu_dereference_bh(hlist_next_rcu(\
+                        &(pos)->member)), typeof(*(pos)), member))
 
 #endif
 
 #ifndef DECLARE_DEFERRABLE_WORK
 #include <linux/timer.h>
 #include <linux/workqueue.h>
-#define DECLARE_DEFERRABLE_WORK(n, f)					\
-	struct delayed_work n = __DELAYED_WORK_INITIALIZER(n, f)
+#define DECLARE_DEFERRABLE_WORK(n, f)                                   \
+        struct delayed_work n = __DELAYED_WORK_INITIALIZER(n, f)
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
+#include <crypto/chacha.h>
+#define CHACHA_KEY_WORDS	8
+#ifndef CHACHA_STATE_WORDS
+#define CHACHA_STATE_WORDS	(CHACHA_BLOCK_SIZE / sizeof(u32))
+#endif
+
+struct chacha_state {
+	u32 x[CHACHA_STATE_WORDS];
+};
+
+static inline void __compat_chacha_init(struct chacha_state *state,
+					const u32 *key,
+					const u8 *iv)
+{
+	(chacha_init)(state->x, key, iv);
+}
+#define chacha_init(state, key, iv) __compat_chacha_init((state), (key), (iv))
+
+static inline void __compat_chacha20_crypt(struct chacha_state *state,
+					       u8 *dst, const u8 *src,
+					       unsigned int bytes)
+{
+	(chacha20_crypt)(state->x, dst, src, bytes);
+}
+#define chacha20_crypt(s, d, src, b) __compat_chacha20_crypt((s),(d),(src),(b))
+
 #endif
 
 #endif /* _WG_COMPAT_H */

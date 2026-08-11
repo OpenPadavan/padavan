@@ -4,6 +4,7 @@
  */
 
 #include "device.h"
+#include "header_protection.h"
 #include "peer.h"
 #include "socket.h"
 #include "queueing.h"
@@ -49,7 +50,7 @@ static int send4(struct wg_device *wg, struct sk_buff *skb,
 		rt = dst_cache_get_ip4(cache, &fl.saddr);
 
 	if (!rt) {
-		security_sk_classify_flow(sock, flowi4_to_flowi(&fl));
+		security_sk_classify_flow(sock, flowi4_to_flowi_common(&fl));
 		if (unlikely(!inet_confirm_addr(sock_net(sock), NULL, 0,
 						fl.saddr, RT_SCOPE_HOST))) {
 			endpoint->src4.s_addr = 0;
@@ -84,7 +85,7 @@ static int send4(struct wg_device *wg, struct sk_buff *skb,
 	skb->ignore_df = 1;
 	udp_tunnel_xmit_skb(rt, sock, skb, fl.saddr, fl.daddr, ds,
 			    ip4_dst_hoplimit(&rt->dst), 0, fl.fl4_sport,
-			    fl.fl4_dport, false, false);
+			    fl.fl4_dport, false, false, 0);
 	goto out;
 
 err:
@@ -129,15 +130,14 @@ static int send6(struct wg_device *wg, struct sk_buff *skb,
 		dst = dst_cache_get_ip6(cache, &fl.saddr);
 
 	if (!dst) {
-		security_sk_classify_flow(sock, flowi6_to_flowi(&fl));
+		security_sk_classify_flow(sock, flowi6_to_flowi_common(&fl));
 		if (unlikely(!ipv6_addr_any(&fl.saddr) &&
 			     !ipv6_chk_addr(sock_net(sock), &fl.saddr, NULL, 0))) {
 			endpoint->src6 = fl.saddr = in6addr_any;
 			if (cache)
 				dst_cache_reset(cache);
 		}
-		dst = ipv6_stub->ipv6_dst_lookup_flow(sock_net(sock), sock, &fl,
-						      NULL);
+		dst = ipv6_stub->ipv6_dst_lookup_flow(sock_net(sock), sock, &fl, NULL);
 		if (IS_ERR(dst)) {
 			ret = PTR_ERR(dst);
 			net_dbg_ratelimited("%s: No route to %pISpfsc, error %d\n",
@@ -151,7 +151,7 @@ static int send6(struct wg_device *wg, struct sk_buff *skb,
 	skb->ignore_df = 1;
 	udp_tunnel6_xmit_skb(dst, sock, skb, skb->dev, &fl.saddr, &fl.daddr, ds,
 			     ip6_dst_hoplimit(dst), 0, fl.fl6_sport,
-			     fl.fl6_dport, false);
+			     fl.fl6_dport, false, 0);
 	goto out;
 
 err:
@@ -187,9 +187,11 @@ int wg_socket_send_skb_to_peer(struct wg_peer *peer, struct sk_buff *skb, u8 ds)
 }
 
 int wg_socket_send_buffer_to_peer(struct wg_peer *peer, void *buffer,
-				  size_t len, u8 ds)
+				  size_t len, u8 ds, size_t padding)
 {
-	struct sk_buff *skb = alloc_skb(len + SKB_HEADER_LEN, GFP_ATOMIC);
+	struct sk_buff *skb = alloc_skb(len + padding + SKB_HEADER_LEN, GFP_ATOMIC);
+	void* crypto;
+	struct chacha_state state;
 
 	if (unlikely(!skb))
 		return -ENOMEM;
@@ -198,29 +200,26 @@ int wg_socket_send_buffer_to_peer(struct wg_peer *peer, void *buffer,
 #ifndef ISPADAVAN
 	skb_set_inner_network_header(skb, 0);
 #endif
-	skb_put_data(skb, buffer, len);
-	return wg_socket_send_skb_to_peer(peer, skb, ds);
-}
 
-int wg_socket_send_junked_buffer_to_peer(struct wg_peer *peer, void *buffer,
-                                          size_t len, u8 ds, u16 junk_size)
-{
-	int ret;
-	void *new_buffer = kzalloc(len + junk_size, GFP_KERNEL);
-	get_random_bytes(new_buffer, junk_size);
-	memcpy(new_buffer + junk_size, buffer, len);
-	ret = wg_socket_send_buffer_to_peer(peer, new_buffer, len + junk_size, ds);
-	kfree(new_buffer);
-	return ret;
+	crypto = skb_put(skb, padding);
+	get_random_bytes(crypto, padding);
+
+	buffer = skb_put_data(skb, buffer, len);
+	if (padding != 0 &&
+			awg_header_protection_init(&state, peer->device, crypto))
+		chacha20_crypt(&state, buffer, buffer, len);
+
+	return wg_socket_send_skb_to_peer(peer, skb, ds);
 }
 
 int wg_socket_send_buffer_as_reply_to_skb(struct wg_device *wg,
 					  struct sk_buff *in_skb, void *buffer,
-					  size_t len)
+					  size_t len, size_t junk_size)
 {
 	int ret = 0;
 	struct sk_buff *skb;
 	struct endpoint endpoint;
+	void* junk;
 
 	if (unlikely(!in_skb))
 		return -EINVAL;
@@ -228,13 +227,15 @@ int wg_socket_send_buffer_as_reply_to_skb(struct wg_device *wg,
 	if (unlikely(ret < 0))
 		return ret;
 
-	skb = alloc_skb(len + SKB_HEADER_LEN, GFP_ATOMIC);
+	skb = alloc_skb(len + junk_size + SKB_HEADER_LEN, GFP_ATOMIC);
 	if (unlikely(!skb))
 		return -ENOMEM;
 	skb_reserve(skb, SKB_HEADER_LEN);
 #ifndef ISPADAVAN
 	skb_set_inner_network_header(skb, 0);
 #endif
+	junk = skb_put(skb, junk_size);
+	get_random_bytes(junk, junk_size);
 	skb_put_data(skb, buffer, len);
 
 	if (endpoint.addr.sa_family == AF_INET)

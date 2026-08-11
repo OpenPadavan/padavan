@@ -3,6 +3,7 @@
  * Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
  */
 
+#include "header_protection.h"
 #include "queueing.h"
 #include "device.h"
 #include "peer.h"
@@ -10,8 +11,11 @@
 #include "messages.h"
 #include "cookie.h"
 #include "socket.h"
+#include "type.h"
 
+#ifdef COMPAT_CRYPTO_IS_ZINC
 #include <linux/simd.h>
+#endif
 #include <linux/ip.h>
 #include <linux/ipv6.h>
 #include <linux/udp.h>
@@ -20,68 +24,82 @@
 /* Must be called with bh disabled. */
 static void update_rx_stats(struct wg_peer *peer, size_t len)
 {
-	struct pcpu_sw_netstats *tstats =
-		get_cpu_ptr(peer->device->dev->tstats);
-
-	u64_stats_update_begin(&tstats->syncp);
-	++tstats->rx_packets;
-	tstats->rx_bytes += len;
+	dev_sw_netstats_rx_add(peer->device->dev, len);
 	peer->rx_bytes += len;
-	u64_stats_update_end(&tstats->syncp);
-	put_cpu_ptr(tstats);
 }
 
-#define SKB_TYPE_LE32(skb) (((struct message_header *)(skb)->data)->type)
-
-static size_t validate_header_len(struct sk_buff *skb, struct wg_device *wg)
-{
-	if (unlikely(skb->len < sizeof(struct message_header)))
-		return 0;
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.transport_packet_magic_header) &&
-	    skb->len >= MESSAGE_MINIMUM_LENGTH)
-		return sizeof(struct message_data);
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.init_packet_magic_header) &&
-	    skb->len == MESSAGE_INITIATION_SIZE)
-		return MESSAGE_INITIATION_SIZE;
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.response_packet_magic_header) &&
-	    skb->len == MESSAGE_RESPONSE_SIZE)
-		return MESSAGE_RESPONSE_SIZE;
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.cookie_packet_magic_header) &&
-	    skb->len == MESSAGE_COOKIE_REPLY_SIZE)
-		return MESSAGE_COOKIE_REPLY_SIZE;
-	return 0;
+static inline __le32 awg_decoded_type(u8 data[4], u8 hash[4]) {
+	u8 buf[4];
+	buf[0] = data[0] ^ hash[0];
+	buf[1] = data[1] ^ hash[1];
+	buf[2] = data[2] ^ hash[2];
+	buf[3] = data[3] ^ hash[3];
+	return ((struct message_header*)buf)->type;
 }
 
-void prepare_advanced_secured_message(struct sk_buff *skb, struct wg_device *wg)
+static inline size_t awg_determine_type_and_padding(struct sk_buff *skb,
+	struct wg_device *wg, u8 hash[4], u16 *res_padding, u32 *res_type)
 {
-	u32 assumed_type = SKB_TYPE_LE32(skb);
-	u32 assumed_offset;
+	void *ptr;
+	u8 buf[4];
+	u16 padding;
 
-	if (wg->advanced_security_config.advanced_security_enabled) {
-		if (skb->len == MESSAGE_INITIATION_SIZE + wg->advanced_security_config.init_packet_junk_size) {
-			assumed_type = cpu_to_le32(wg->advanced_security_config.init_packet_magic_header);
-			assumed_offset = wg->advanced_security_config.init_packet_junk_size;
-		} else if (skb->len == MESSAGE_RESPONSE_SIZE + wg->advanced_security_config.response_packet_junk_size) {
-			assumed_type = cpu_to_le32(wg->advanced_security_config.response_packet_magic_header);
-			assumed_offset = wg->advanced_security_config.response_packet_junk_size;
-		} else
-			return;
-
-		if (unlikely(assumed_offset <= 0) || unlikely(!pskb_may_pull(skb, assumed_offset)))
-			return;
-
-		skb_pull(skb, assumed_offset);
-
-		if (SKB_TYPE_LE32(skb) != assumed_type) {
-			skb_push(skb, assumed_offset);
-		}
+	padding = wg->init_padding;
+	if (skb->len == padding + sizeof(struct message_handshake_initiation) &&
+		(ptr = skb_header_pointer(skb, padding, sizeof(buf), buf)) != NULL &&
+		u32_range_contains(wg->init_header,
+			awg_decoded_type(ptr, hash))) {
+		*res_padding = padding;
+		*res_type = MESSAGE_HANDSHAKE_INITIATION;
+		return sizeof(struct message_handshake_initiation);
 	}
+
+	padding = wg->resp_padding;
+	if (skb->len == padding + sizeof(struct message_handshake_response) &&
+		(ptr = skb_header_pointer(skb, padding, sizeof(buf), buf)) != NULL &&
+		u32_range_contains(wg->resp_header,
+			awg_decoded_type(ptr, hash))) {
+		*res_padding = padding;
+		*res_type = MESSAGE_HANDSHAKE_RESPONSE;
+		return sizeof(struct message_handshake_response);
+	}
+
+	padding = wg->cookie_padding;
+	if (skb->len == padding + sizeof(struct message_handshake_cookie) &&
+		(ptr = skb_header_pointer(skb, padding, sizeof(buf), buf)) != NULL &&
+		u32_range_contains(wg->cookie_header, 
+			awg_decoded_type(ptr, hash))) {
+		*res_padding = padding;
+		*res_type = MESSAGE_HANDSHAKE_COOKIE;
+		return sizeof(struct message_handshake_cookie);
+	}
+
+	padding = wg->transport_padding;
+	if (skb->len >= padding + MESSAGE_MINIMUM_LENGTH &&
+		(ptr = skb_header_pointer(skb, padding, sizeof(buf), buf)) != NULL &&
+		u32_range_contains(wg->transport_header,
+			awg_decoded_type(ptr, hash))) {
+		*res_padding = padding;
+		*res_type = MESSAGE_DATA;
+		return sizeof(struct message_data);
+	}
+
+	net_dbg_skb_ratelimited("%s: Unknown message from %pISpfsc encountered, packet dropped\n",
+								wg->dev->name, skb);
+	*res_padding = 0;
+	*res_type = MESSAGE_INVALID;
+	return 0;
 }
 
 static int prepare_skb_header(struct sk_buff *skb, struct wg_device *wg)
 {
+	struct chacha_state state;
 	size_t data_offset, data_len, header_len;
 	struct udphdr *udp;
+	u8 buf[HEADER_PROTECTION_NONCE_SIZE], *ptr, hash[4] = {0};
+	u32 type;
+	u16 padding;
+	bool protected;
 
 	if (unlikely(!wg_check_packet_protocol(skb) ||
 		     skb_transport_header(skb) < skb->head ||
@@ -113,14 +131,34 @@ static int prepare_skb_header(struct sk_buff *skb, struct wg_device *wg)
 	if (unlikely(skb->len != data_len))
 		/* Final len does not agree with calculated len */
 		return -EINVAL;
-	prepare_advanced_secured_message(skb, wg);
-	header_len = validate_header_len(skb, wg);
+
+	protected = awg_has_header_protection(wg);
+	if (protected) {
+		ptr = skb_header_pointer(skb, 0, sizeof(buf), buf);
+		if (!ptr)
+			return -EINVAL;
+
+		protected = awg_header_protection_init(&state, wg, ptr);
+		if (protected) {
+			chacha20_crypt(&state, hash, hash, sizeof(hash));
+			state.x[12] = 0; // rewind counter to 0
+		}
+	}
+
+	header_len = awg_determine_type_and_padding(skb, wg, hash, &padding, &type);
 	if (unlikely(!header_len))
 		return -EINVAL;
+
+	PACKET_CB(skb)->type = type;
+
 	__skb_push(skb, data_offset);
-	if (unlikely(!pskb_may_pull(skb, data_offset + header_len)))
+	if (unlikely(!pskb_may_pull(skb, data_offset + padding + header_len)))
 		return -EINVAL;
-	__skb_pull(skb, data_offset);
+	__skb_pull(skb, data_offset + padding);
+
+	if (protected)
+		chacha20_crypt(&state, skb->data, skb->data, header_len);
+
 	return 0;
 }
 
@@ -135,8 +173,8 @@ static void wg_receive_handshake_packet(struct wg_device *wg,
 	static u64 last_under_load;
 	bool packet_needs_cookie;
 	bool under_load;
-
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.cookie_packet_magic_header)) {
+	
+	if (PACKET_CB(skb)->type == MESSAGE_HANDSHAKE_COOKIE) {
 		net_dbg_skb_ratelimited("%s: Receiving cookie response from %pISpfsc\n",
 					wg->dev->name, skb);
 		wg_cookie_message_consume(
@@ -166,7 +204,8 @@ static void wg_receive_handshake_packet(struct wg_device *wg,
 		return;
 	}
 
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.init_packet_magic_header)) {
+	switch (PACKET_CB(skb)->type) {
+	case MESSAGE_HANDSHAKE_INITIATION: {
 		struct message_handshake_initiation *message =
 			(struct message_handshake_initiation *)skb->data;
 
@@ -175,7 +214,7 @@ static void wg_receive_handshake_packet(struct wg_device *wg,
 							message->sender_index);
 			return;
 		}
-		peer = wg_noise_handshake_consume_initiation(message, wg);
+		peer = wg_noise_handshake_consume_initiation(message, wg, skb);
 		if (unlikely(!peer)) {
 			net_dbg_skb_ratelimited("%s: Invalid handshake initiation from %pISpfsc\n",
 						wg->dev->name, skb);
@@ -186,8 +225,9 @@ static void wg_receive_handshake_packet(struct wg_device *wg,
 				    wg->dev->name, peer->internal_id,
 				    &peer->endpoint.addr);
 		wg_packet_send_handshake_response(peer);
+		break;
 	}
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.response_packet_magic_header)) {
+	case MESSAGE_HANDSHAKE_RESPONSE: {
 		struct message_handshake_response *message =
 			(struct message_handshake_response *)skb->data;
 
@@ -218,6 +258,8 @@ static void wg_receive_handshake_packet(struct wg_device *wg,
 			 */
 			wg_packet_send_keepalive(peer);
 		}
+		break;
+	}
 	}
 
 	if (unlikely(!peer)) {
@@ -248,6 +290,14 @@ void wg_packet_handshake_receive_worker(struct work_struct *work)
 	}
 }
 
+static int key_fresh_timeout(struct wg_peer *peer)
+{
+	return
+		(!u16_range_is_zero(peer->device->reject_after_time) ? u16_range_pick_one(peer->device->reject_after_time) : REJECT_AFTER_TIME) -
+		(!u16_range_is_zero(peer->device->keepalive_timeout) ? u16_range_lo(peer->device->keepalive_timeout) : KEEPALIVE_TIMEOUT) -
+		(!u16_range_is_zero(peer->device->rekey_timeout) ? u16_range_lo(peer->device->rekey_timeout) : REKEY_TIMEOUT);
+}
+
 static void keep_key_fresh(struct wg_peer *peer)
 {
 	struct noise_keypair *keypair;
@@ -260,8 +310,7 @@ static void keep_key_fresh(struct wg_peer *peer)
 	keypair = rcu_dereference_bh(peer->keypairs.current_keypair);
 	send = keypair && READ_ONCE(keypair->sending.is_valid) &&
 	       keypair->i_am_the_initiator &&
-	       wg_birthdate_has_expired(keypair->sending.birthdate,
-			REJECT_AFTER_TIME - KEEPALIVE_TIMEOUT - REKEY_TIMEOUT);
+	       wg_birthdate_has_expired(keypair->sending.birthdate, key_fresh_timeout(peer));
 	rcu_read_unlock_bh();
 
 	if (unlikely(send)) {
@@ -270,8 +319,8 @@ static void keep_key_fresh(struct wg_peer *peer)
 	}
 }
 
-static bool decrypt_packet(struct sk_buff *skb, struct noise_keypair *keypair,
-			   simd_context_t *simd_context)
+static bool decrypt_packet(struct sk_buff *skb, struct noise_keypair *keypair
+			   COMPAT_MAYBE_SIMD_CONTEXT(simd_context_t *simd_context))
 {
 	struct scatterlist sg[MAX_SKB_FRAGS + 8];
 	struct sk_buff *trailer;
@@ -283,7 +332,7 @@ static bool decrypt_packet(struct sk_buff *skb, struct noise_keypair *keypair,
 
 	if (unlikely(!READ_ONCE(keypair->receiving.is_valid) ||
 		  wg_birthdate_has_expired(keypair->receiving.birthdate, REJECT_AFTER_TIME) ||
-		  keypair->receiving_counter.counter >= REJECT_AFTER_MESSAGES)) {
+		  READ_ONCE(keypair->receiving_counter.counter) >= REJECT_AFTER_MESSAGES)) {
 		WRITE_ONCE(keypair->receiving.is_valid, false);
 		return false;
 	}
@@ -295,7 +344,7 @@ static bool decrypt_packet(struct sk_buff *skb, struct noise_keypair *keypair,
 	 * call skb_cow_data, so that there's no chance that data is removed
 	 * from the skb, so that later we can extract the original endpoint.
 	 */
-	offset = skb->data - skb_network_header(skb);
+	offset = -skb_network_offset(skb);
 	skb_push(skb, offset);
 	num_frags = skb_cow_data(skb, 0, &trailer);
 	offset += sizeof(struct message_data);
@@ -308,9 +357,9 @@ static bool decrypt_packet(struct sk_buff *skb, struct noise_keypair *keypair,
 		return false;
 
 	if (!chacha20poly1305_decrypt_sg_inplace(sg, skb->len, NULL, 0,
-						 PACKET_CB(skb)->nonce,
-						 keypair->receiving.key,
-						 simd_context))
+					         PACKET_CB(skb)->nonce,
+						 keypair->receiving.key
+					 COMPAT_MAYBE_SIMD_CONTEXT(simd_context)))
 		return false;
 
 	/* Another ugly situation of pushing and pulling the header so as to
@@ -351,7 +400,7 @@ static bool counter_validate(struct noise_replay_counter *counter, u64 their_cou
 		for (i = 1; i <= top; ++i)
 			counter->backtrack[(i + index_current) &
 				((COUNTER_BITS_TOTAL / BITS_PER_LONG) - 1)] = 0;
-		counter->counter = their_counter;
+		WRITE_ONCE(counter->counter, their_counter);
 	}
 
 	index &= (COUNTER_BITS_TOTAL / BITS_PER_LONG) - 1;
@@ -372,6 +421,7 @@ static void wg_packet_consume_data_done(struct wg_peer *peer,
 	struct net_device *dev = peer->device->dev;
 	unsigned int len, len_before_trim;
 	struct wg_peer *routed_peer;
+	u8 buf, *p = skb_header_pointer(skb, 0, 1, &buf);
 
 	wg_socket_set_peer_endpoint(peer, endpoint);
 
@@ -386,9 +436,11 @@ static void wg_packet_consume_data_done(struct wg_peer *peer,
 	wg_timers_any_authenticated_packet_received(peer);
 	wg_timers_any_authenticated_packet_traversal(peer);
 
-	/* A packet with length 0 is a keepalive packet */
-	if (unlikely(!skb->len)) {
-		update_rx_stats(peer, message_data_len(0));
+	/* A packet with length 0, or with all zeroes (content padding)
+	 * is a keepalive packet
+	 */
+	if (unlikely(!p || *p == 0)) {
+		update_rx_stats(peer, message_data_len(0) + skb->len);
 		net_dbg_ratelimited("%s: Receiving keepalive packet from peer %llu (%pISpfsc)\n",
 				    dev->name, peer->internal_id,
 				    &peer->endpoint.addr);
@@ -422,10 +474,12 @@ static void wg_packet_consume_data_done(struct wg_peer *peer,
 		if (unlikely(len < sizeof(struct iphdr)))
 			goto dishonest_packet_size;
 		INET_ECN_decapsulate(skb, PACKET_CB(skb)->ds, ip_hdr(skb)->tos);
+#if IS_ENABLED(CONFIG_IPV6)
 	} else if (skb->protocol == htons(ETH_P_IPV6)) {
 		len = ntohs(ipv6_hdr(skb)->payload_len) +
 		      sizeof(struct ipv6hdr);
 		INET_ECN_decapsulate(skb, PACKET_CB(skb)->ds, ipv6_get_dsfield(ipv6_hdr(skb)));
+#endif
 	} else {
 		goto dishonest_packet_type;
 	}
@@ -443,34 +497,28 @@ static void wg_packet_consume_data_done(struct wg_peer *peer,
 	if (unlikely(routed_peer != peer))
 		goto dishonest_packet_peer;
 
-	if (unlikely(napi_gro_receive(&peer->napi, skb) == GRO_DROP)) {
-		++dev->stats.rx_dropped;
-		net_dbg_ratelimited("%s: Failed to give packet to userspace from peer %llu (%pISpfsc)\n",
-				    dev->name, peer->internal_id,
-				    &peer->endpoint.addr);
-	} else {
-		update_rx_stats(peer, message_data_len(len_before_trim));
-	}
+	napi_gro_receive(&peer->napi, skb);
+	update_rx_stats(peer, message_data_len(len_before_trim));
 	return;
 
 dishonest_packet_peer:
 	net_dbg_skb_ratelimited("%s: Packet has unallowed src IP (%pISc) from peer %llu (%pISpfsc)\n",
 				dev->name, skb, peer->internal_id,
 				&peer->endpoint.addr);
-	++dev->stats.rx_errors;
-	++dev->stats.rx_frame_errors;
+	DEV_STATS_INC(dev, rx_errors);
+	DEV_STATS_INC(dev, rx_frame_errors);
 	goto packet_processed;
 dishonest_packet_type:
 	net_dbg_ratelimited("%s: Packet is neither ipv4 nor ipv6 from peer %llu (%pISpfsc)\n",
 			    dev->name, peer->internal_id, &peer->endpoint.addr);
-	++dev->stats.rx_errors;
-	++dev->stats.rx_frame_errors;
+	DEV_STATS_INC(dev, rx_errors);
+	DEV_STATS_INC(dev, rx_frame_errors);
 	goto packet_processed;
 dishonest_packet_size:
 	net_dbg_ratelimited("%s: Packet has incorrect size from peer %llu (%pISpfsc)\n",
 			    dev->name, peer->internal_id, &peer->endpoint.addr);
-	++dev->stats.rx_errors;
-	++dev->stats.rx_length_errors;
+	DEV_STATS_INC(dev, rx_errors);
+	DEV_STATS_INC(dev, rx_length_errors);
 	goto packet_processed;
 packet_processed:
 	dev_kfree_skb(skb);
@@ -504,7 +552,7 @@ int wg_packet_rx_poll(struct napi_struct *napi, int budget)
 			net_dbg_ratelimited("%s: Packet has invalid nonce %llu (max %llu)\n",
 					    peer->device->dev->name,
 					    PACKET_CB(skb)->nonce,
-					    keypair->receiving_counter.counter);
+					    READ_ONCE(keypair->receiving_counter.counter));
 			goto next;
 		}
 
@@ -535,20 +583,27 @@ void wg_packet_decrypt_worker(struct work_struct *work)
 {
 	struct crypt_queue *queue = container_of(work, struct multicore_worker,
 						 work)->ptr;
-	simd_context_t simd_context;
 	struct sk_buff *skb;
-
+#ifdef COMPAT_CRYPTO_IS_ZINC
+	simd_context_t simd_context;
 	simd_get(&simd_context);
+#endif
 	while ((skb = ptr_ring_consume_bh(&queue->ring)) != NULL) {
 		enum packet_state state =
-			likely(decrypt_packet(skb, PACKET_CB(skb)->keypair,
-					      &simd_context)) ?
+			likely(decrypt_packet(skb, PACKET_CB(skb)->keypair
+					      COMPAT_MAYBE_SIMD_CONTEXT(&simd_context))) ?
 				PACKET_STATE_CRYPTED : PACKET_STATE_DEAD;
 		wg_queue_enqueue_per_peer_rx(skb, state);
+#ifdef COMPAT_CRYPTO_IS_ZINC
 		simd_relax(&simd_context);
+#endif
+		if (need_resched())
+			cond_resched();
 	}
 
+#ifdef COMPAT_CRYPTO_IS_ZINC
 	simd_put(&simd_context);
+#endif
 }
 
 static void wg_packet_consume_data(struct wg_device *wg, struct sk_buff *skb)
@@ -569,7 +624,7 @@ static void wg_packet_consume_data(struct wg_device *wg, struct sk_buff *skb)
 		goto err;
 
 	ret = wg_queue_enqueue_per_device_and_peer(&wg->decrypt_queue, &peer->rx_queue, skb,
-						   wg->packet_crypt_wq, &wg->decrypt_queue.last_cpu);
+						   wg->packet_crypt_wq);
 	if (unlikely(ret == -EPIPE))
 		wg_queue_enqueue_per_peer_rx(skb, PACKET_STATE_DEAD);
 	if (likely(!ret || ret == -EPIPE)) {
@@ -588,10 +643,10 @@ void wg_packet_receive(struct wg_device *wg, struct sk_buff *skb)
 {
 	if (unlikely(prepare_skb_header(skb, wg) < 0))
 		goto err;
-
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.init_packet_magic_header) ||
-	    SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.response_packet_magic_header) ||
-	    SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.cookie_packet_magic_header)) {
+	switch(PACKET_CB(skb)->type) {
+	case MESSAGE_HANDSHAKE_INITIATION:
+	case MESSAGE_HANDSHAKE_RESPONSE:
+	case MESSAGE_HANDSHAKE_COOKIE: {
 		int cpu, ret = -EBUSY;
 
 		if (unlikely(!rng_is_initialized()))
@@ -604,20 +659,23 @@ void wg_packet_receive(struct wg_device *wg, struct sk_buff *skb)
 		} else
 			ret = ptr_ring_produce_bh(&wg->handshake_queue.ring, skb);
 		if (ret) {
-drop:
+	drop:
 			net_dbg_skb_ratelimited("%s: Dropping handshake packet from %pISpfsc\n",
-			                        wg->dev->name, skb);
+						wg->dev->name, skb);
 			goto err;
 		}
 		atomic_inc(&wg->handshake_queue_len);
 		cpu = wg_cpumask_next_online(&wg->handshake_queue.last_cpu);
 		/* Queues up a call to packet_process_queued_handshake_packets(skb): */
 		queue_work_on(cpu, wg->handshake_receive_wq,
-			      		              &per_cpu_ptr(wg->handshake_queue.worker, cpu)->work);
-	} else if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.transport_packet_magic_header)) {
+			      &per_cpu_ptr(wg->handshake_queue.worker, cpu)->work);
+		break;
+	}
+	case MESSAGE_DATA:
 		PACKET_CB(skb)->ds = ip_tunnel_get_dsfield(ip_hdr(skb), skb);
 		wg_packet_consume_data(wg, skb);
-	} else {
+		break;
+	default:
 		WARN(1, "Non-exhaustive parsing of packet header lead to unknown packet type!\n");
 		goto err;
 	}
