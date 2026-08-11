@@ -146,9 +146,12 @@ safe_start_xl2tpd(void)
 		has_lac_lns++;
 	}
 
+	if (fchmod(fileno(fp), 0644) != 0) {
+		perror(l2tp_conf);
+		fclose(fp);
+		return -1;
+	}
 	fclose(fp);
-
-	chmod(l2tp_conf, 0644);
 
 	/* launch xl2tpd */
 	if (!pids("xl2tpd"))
@@ -192,9 +195,12 @@ start_rpl2tp(int unit)
 		"section cmd\n\n",
 		options, get_wan_ppp_peer(unit));
 
+	if (fchmod(fileno(fp), 0644) != 0) {
+		perror(l2tp_conf);
+		fclose(fp);
+		return -1;
+	}
 	fclose(fp);
-
-	chmod(l2tp_conf, 0644);
 
 	/* launch rp-l2tp */
 	eval("/usr/sbin/l2tpd");
