@@ -4,10 +4,26 @@ on:
   push:
     branches:
       - "main"
+    paths-ignore:
+      # Skip runs when only documentation/metadata changes.
+      - "*.md"
+      - "LICENSE*"
+      - "SECURITY*"
+      - "changes.eng.txt"
+      - "Dockerfile"
+      - "docker-compose.yml"
 
   pull_request:
     branches:
       - "main"
+    paths-ignore:
+      # Skip runs when only documentation/metadata changes.
+      - "*.md"
+      - "LICENSE*"
+      - "SECURITY*"
+      - "changes.eng.txt"
+      - "Dockerfile"
+      - "docker-compose.yml"
 
   schedule:
     - cron: "38 0 * * 1"
@@ -24,6 +40,11 @@ jobs:
       actions: read
       contents: read
 
+    # Fail with a clear timeout message instead of being hard-cancelled by
+    # GitHub when a run approaches the 6h execution limit while bundling the
+    # C/C++ database.
+    timeout-minutes: 330
+
     strategy:
       fail-fast: false
       matrix:
@@ -32,13 +53,29 @@ jobs:
           - language: actions
             build-mode: none
 
-          # Analyze C and C++ source code
+          # Analyze C and C++ source code.
+          #
+          # C/C++ does not support `paths`/`paths-ignore` filtering, so the
+          # scope is reduced via a sparse checkout: only `trunk/` and `uboot/`
+          # (the firmware itself) plus `.github/` are pulled. The 5+ GB
+          # `toolchain/` tree (cross-compiler build sources, roughly 57k C
+          # files, about half of the repository's C files) is excluded so that
+          # extraction and database bundling finish within the runner's time
+          # limit.
           - language: c-cpp
             build-mode: none
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          # Keep the C/C++ CodeQL workload small: pull only the firmware
+          # source and the workflow files, skipping `toolchain/` (see the
+          # matrix comment above). The `actions` job scans the same files.
+          sparse-checkout: |
+            trunk
+            uboot
+            .github
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
