@@ -653,6 +653,7 @@ gaih_inet(const char *name, const struct gaih_service *service,
 
 	{
 		const char *c = NULL;
+		char *tmpbuf = NULL;
 		struct gaih_servtuple *st2;
 		struct gaih_addrtuple *at2 = at;
 		size_t socklen, namelen;
@@ -673,15 +674,20 @@ gaih_inet(const char *name, const struct gaih_service *service,
 				int herrno;
 				struct hostent th;
 				size_t tmpbuflen = 512;
-				char *tmpbuf;
 
 				/* Hint says numeric, but address is not */
 				if (req->ai_flags & AI_NUMERICHOST)
 					return -EAI_NONAME;
 
 				do {
+					char *newbuf;
+
 					tmpbuflen *= 2;
-					tmpbuf = alloca(tmpbuflen);
+					free(tmpbuf);
+					newbuf = malloc(tmpbuflen);
+					if (newbuf == NULL)
+						return -EAI_MEMORY;
+					tmpbuf = newbuf;
 					rc = gethostbyaddr_r(at2->addr,
 #ifdef __UCLIBC_HAS_IPV6__
 						((at2->family == AF_INET6)
@@ -696,6 +702,7 @@ gaih_inet(const char *name, const struct gaih_service *service,
 				} while (rc == ERANGE && herrno == NETDB_INTERNAL);
 
 				if (rc != 0 && herrno == NETDB_INTERNAL) {
+					free(tmpbuf);
 					__set_h_errno(herrno);
 					return -EAI_SYSTEM;
 				}
@@ -703,8 +710,10 @@ gaih_inet(const char *name, const struct gaih_service *service,
 				if (h != NULL)
 					c = h->h_name;
 
-				if (c == NULL)
+				if (c == NULL) {
+					free(tmpbuf);
 					return (GAIH_OKIFUNSPEC | -EAI_NONAME);
+				}
 
 				namelen = strlen(c) + 1;
 			} else
@@ -743,8 +752,10 @@ gaih_inet(const char *name, const struct gaih_service *service,
 #endif
 				}
 				*pai = malloc(sizeof(struct addrinfo) + socklen + namelen);
-				if (*pai == NULL)
+				if (*pai == NULL) {
+					free(tmpbuf);
 					return -EAI_MEMORY;
+				}
 
 				(*pai)->ai_flags = req->ai_flags;
 				(*pai)->ai_family = family;
@@ -799,6 +810,8 @@ gaih_inet(const char *name, const struct gaih_service *service,
 				pai = &((*pai)->ai_next);
 			}
 ignore:
+			free(tmpbuf);
+			tmpbuf = NULL;
 			at2 = at2->next;
 		}
 	}
