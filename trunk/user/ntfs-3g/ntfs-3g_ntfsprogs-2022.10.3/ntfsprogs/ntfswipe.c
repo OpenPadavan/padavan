@@ -557,16 +557,16 @@ static s64 wipe_unused_fast(ntfs_volume *vol, int byte, enum action act)
 	if (!vol || (byte < 0))
 		return -1;
 
-	big_buffer = (u8*)malloc(vol->cluster_size*64);
+	big_buffer = (u8*)malloc((size_t)vol->cluster_size*64);
 	if (!big_buffer) {
 		ntfs_log_error("malloc failed\n");
 		return -1;
 	}
 
 	for (i = 0; i < vol->nr_clusters; i+=64) {
-		blksize = vol->nr_clusters - i;
-		if (blksize > 64)
-			blksize = 64;
+		blksize = 64;
+		if (vol->nr_clusters - i < blksize)
+			blksize = (unsigned int)(vol->nr_clusters - i);
 	   /* if all clusters in this block are used, ignore the block */
 		result = 0;
 		for (j = 0; j < blksize; j++) {
@@ -582,9 +582,9 @@ static s64 wipe_unused_fast(ntfs_volume *vol, int byte, enum action act)
 		 * if all unused clusters in this block are already wiped,
 		 * ignore the block
 		 */
-		if (ntfs_pread(vol->dev, vol->cluster_size * i,
-					vol->cluster_size * blksize, big_buffer)
-				!= vol->cluster_size * blksize) {
+		if (ntfs_pread(vol->dev, (s64)vol->cluster_size * i,
+					(s64)vol->cluster_size * blksize, big_buffer)
+				!= (s64)vol->cluster_size * blksize) {
 			ntfs_log_error("Read failed at cluster %lld\n",
 					(long long)i);
 			goto free;
@@ -592,7 +592,7 @@ static s64 wipe_unused_fast(ntfs_volume *vol, int byte, enum action act)
 
 		result = 0;
 		wipe_needed = FALSE;
-		u32_bytes = (byte & 255)*0x01010101;
+		u32_bytes = (u32)(byte & 255)*0x01010101u;
 		buffer = big_buffer;
 		for (j = 0; (j < blksize) && !wipe_needed; j++) {
 			u32_buffer = (u32*)buffer;
@@ -621,9 +621,9 @@ static s64 wipe_unused_fast(ntfs_volume *vol, int byte, enum action act)
 		}
 
 		if ((act == act_wipe)
-			&& (ntfs_pwrite(vol->dev, vol->cluster_size * i,
-				vol->cluster_size * blksize, big_buffer)
-					!= vol->cluster_size * blksize)) {
+			&& (ntfs_pwrite(vol->dev, (s64)vol->cluster_size * i,
+				(s64)vol->cluster_size * blksize, big_buffer)
+					!= (s64)vol->cluster_size * blksize)) {
 			ntfs_log_error("Write failed at cluster %lld\n",
 					(long long)i);
 			goto free;
