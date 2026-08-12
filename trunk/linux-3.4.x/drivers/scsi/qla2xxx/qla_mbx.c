@@ -131,15 +131,15 @@ qla2x00_mailbox_command(scsi_qla_host_t *vha, mbx_cmd_t *mcp)
 	ql_dbg(ql_dbg_mbx + ql_dbg_buffer, vha, 0x1111,
 	    "Loaded MBX registers (displayed in bytes) =.\n");
 	ql_dump_buffer(ql_dbg_mbx + ql_dbg_buffer, vha, 0x1112,
-	    (uint8_t *)mcp->mb, 16);
+	    (uint8_t *)mcp->mb, 16, 16);
 	ql_dbg(ql_dbg_mbx + ql_dbg_buffer, vha, 0x1113,
 	    ".\n");
 	ql_dump_buffer(ql_dbg_mbx + ql_dbg_buffer, vha, 0x1114,
-	    ((uint8_t *)mcp->mb + 0x10), 16);
+	    ((uint8_t *)mcp->mb + 0x10), 16, 16);
 	ql_dbg(ql_dbg_mbx + ql_dbg_buffer, vha, 0x1115,
 	    ".\n");
 	ql_dump_buffer(ql_dbg_mbx + ql_dbg_buffer, vha, 0x1116,
-	    ((uint8_t *)mcp->mb + 0x20), 8);
+	    ((uint8_t *)mcp->mb + 0x20), 8, 16);
 	ql_dbg(ql_dbg_mbx + ql_dbg_buffer, vha, 0x1117,
 	    "I/O Address = %p.\n", optr);
 	ql_dump_regs(ql_dbg_mbx + ql_dbg_buffer, vha, 0x100e);
@@ -2228,7 +2228,7 @@ qla2x00_get_fcal_position_map(scsi_qla_host_t *vha, char *pos_map)
 		    "mb0/mb1=%x/%X FC/AL position map size (%x).\n",
 		    mcp->mb[0], mcp->mb[1], (unsigned)pmap[0]);
 		ql_dump_buffer(ql_dbg_mbx + ql_dbg_buffer, vha, 0x111d,
-		    pmap, pmap[0] + 1);
+		    pmap, pmap[0] + 1, 16);
 
 		if (pos_map)
 			memcpy(pos_map, pmap, FCAL_MAP_SIZE);
@@ -3268,7 +3268,7 @@ qla84xx_verify_chip(struct scsi_qla_host *vha, uint16_t *status)
 		ql_dbg(ql_dbg_mbx + ql_dbg_buffer, vha, 0x111c,
 		    "Dump of Verify Request.\n");
 		ql_dump_buffer(ql_dbg_mbx + ql_dbg_buffer, vha, 0x111e,
-		    (uint8_t *)mn, sizeof(*mn));
+		    (uint8_t *)mn, sizeof(*mn), 16);
 
 		rval = qla2x00_issue_iocb_timeout(vha, mn, mn_dma, 0, 120);
 		if (rval != QLA_SUCCESS) {
@@ -3280,7 +3280,7 @@ qla84xx_verify_chip(struct scsi_qla_host *vha, uint16_t *status)
 		ql_dbg(ql_dbg_mbx + ql_dbg_buffer, vha, 0x1110,
 		    "Dump of Verify Response.\n");
 		ql_dump_buffer(ql_dbg_mbx + ql_dbg_buffer, vha, 0x1118,
-		    (uint8_t *)mn, sizeof(*mn));
+		    (uint8_t *)mn, sizeof(*mn), 16);
 
 		status[0] = le16_to_cpu(mn->p.rsp.comp_status);
 		status[1] = status[0] == CS_VCS_CHIP_FAILURE ?

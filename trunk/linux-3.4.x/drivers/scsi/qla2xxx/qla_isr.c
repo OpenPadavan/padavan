@@ -924,7 +924,7 @@ qla2x00_mbx_iocb_entry(scsi_qla_host_t *vha, struct req_que *req,
 		    le16_to_cpu(mbx->status_flags));
 
 		ql_dump_buffer(ql_dbg_async + ql_dbg_buffer, vha, 0x5029,
-		    (uint8_t *)mbx, sizeof(*mbx));
+		    (uint8_t *)mbx, sizeof(*mbx), 16);
 
 		goto logio_done;
 	}
@@ -1021,7 +1021,7 @@ qla2x00_ct_entry(scsi_qla_host_t *vha, struct req_que *req,
 			bsg_job->reply->reply_payload_rcv_len = 0;
 		}
 		ql_dump_buffer(ql_dbg_async + ql_dbg_buffer, vha, 0x5035,
-		    (uint8_t *)pkt, sizeof(*pkt));
+		    (uint8_t *)pkt, sizeof(*pkt), 16);
 	} else {
 		res = DID_OK << 16;
 		bsg_job->reply->reply_payload_rcv_len =
@@ -1105,7 +1105,7 @@ qla24xx_els_ct_entry(scsi_qla_host_t *vha, struct req_que *req,
 			memcpy( fw_sts_ptr, fw_status, sizeof(fw_status));
 		}
 		ql_dump_buffer(ql_dbg_user + ql_dbg_buffer, vha, 0x5056,
-				(uint8_t *)pkt, sizeof(*pkt));
+				(uint8_t *)pkt, sizeof(*pkt), 16);
 	}
 	else {
 		res =  DID_OK << 16;
@@ -1148,7 +1148,7 @@ qla24xx_logio_entry(scsi_qla_host_t *vha, struct req_que *req,
 		    fcport->d_id.b.area, fcport->d_id.b.al_pa,
 		    logio->entry_status);
 		ql_dump_buffer(ql_dbg_async + ql_dbg_buffer, vha, 0x504d,
-		    (uint8_t *)logio, sizeof(*logio));
+		    (uint8_t *)logio, sizeof(*logio), 16);
 
 		goto logio_done;
 	}
@@ -1255,7 +1255,7 @@ qla24xx_tm_iocb_entry(scsi_qla_host_t *vha, struct req_que *req,
 	if (error) {
 		iocb->u.tmf.data = error;
 		ql_dump_buffer(ql_dbg_async + ql_dbg_buffer, vha, 0x5055,
-		    (uint8_t *)sts, sizeof(*sts));
+		    (uint8_t *)sts, sizeof(*sts), 16);
 	}
 
 	sp->done(vha, sp, 0);
@@ -1377,7 +1377,7 @@ qla2x00_handle_sense(srb_t *sp, uint8_t *sense_data, uint32_t par_sense_len,
 		    sp->fcport->vha->host_no, cp->device->id, cp->device->lun,
 		    cp);
 		ql_dump_buffer(ql_dbg_io + ql_dbg_buffer, vha, 0x302b,
-		    cp->sense_buffer, sense_len);
+		    cp->sense_buffer, sense_len, 16);
 	}
 }
 
@@ -1867,7 +1867,7 @@ qla2x00_status_cont_entry(struct rsp_que *rsp, sts_cont_entry_t *pkt)
 		host_to_fcp_swap(pkt->data, sizeof(pkt->data));
 	memcpy(sense_ptr, pkt->data, sense_sz);
 	ql_dump_buffer(ql_dbg_io + ql_dbg_buffer, vha, 0x302c,
-		sense_ptr, sense_sz);
+		sense_ptr, sense_sz, 16);
 
 	sense_len -= sense_sz;
 	sense_ptr += sense_sz;

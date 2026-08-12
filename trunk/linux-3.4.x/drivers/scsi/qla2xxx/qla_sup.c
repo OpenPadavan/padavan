@@ -616,7 +616,7 @@ qla2xxx_find_flt_start(scsi_qla_host_t *vha, uint32_t *start)
 		ql_log(ql_log_fatal, vha, 0x0045,
 		    "Inconsistent FLTL detected: checksum=0x%x.\n", chksum);
 		ql_dump_buffer(ql_dbg_init + ql_dbg_buffer, vha, 0x010e,
-		    buf, sizeof(struct qla_flt_location));
+		    buf, sizeof(struct qla_flt_location), 16);
 		return QLA_FUNCTION_FAILED;
 	}
 
@@ -887,7 +887,7 @@ qla2xxx_get_fdt_info(scsi_qla_host_t *vha)
 		    " checksum=0x%x id=%c version0x%x.\n", chksum,
 		    fdt->sig[0], le16_to_cpu(fdt->version));
 		ql_dump_buffer(ql_dbg_init + ql_dbg_buffer, vha, 0x0113,
-		    (uint8_t *)fdt, sizeof(*fdt));
+		    (uint8_t *)fdt, sizeof(*fdt), 16);
 		goto no_flash_data;
 	}
 
@@ -2778,7 +2778,7 @@ qla2x00_get_flash_version(scsi_qla_host_t *vha, void *mbuf)
 		    "Dumping fw "
 		    "ver from flash:.\n");
 		ql_dump_buffer(ql_dbg_init + ql_dbg_buffer, vha, 0x010b,
-		    (uint8_t *)dbyte, 8);
+		    (uint8_t *)dbyte, 8, 16);
 
 		if ((dcode[0] == 0xffff && dcode[1] == 0xffff &&
 		    dcode[2] == 0xffff && dcode[3] == 0xffff) ||

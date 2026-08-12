@@ -2467,7 +2467,7 @@ ql_dump_regs(uint32_t level, scsi_qla_host_t *vha, int32_t id)
 
 void
 ql_dump_buffer(uint32_t level, scsi_qla_host_t *vha, int32_t id,
-	uint8_t *b, uint32_t size)
+	uint8_t *b, uint32_t size, uint32_t line_width)
 {
 	uint32_t cnt;
 	uint8_t c;
@@ -2485,11 +2485,11 @@ ql_dump_buffer(uint32_t level, scsi_qla_host_t *vha, int32_t id,
 		c = *b++;
 		printk("%02x", (uint32_t) c);
 		cnt++;
-		if (!(cnt % 16))
+		if (!(cnt % line_width))
 			printk("\n");
 		else
 			printk("  ");
 	}
-	if (cnt % 16)
+	if (cnt % line_width)
 		ql_dbg(level, vha, id, "\n");
 }

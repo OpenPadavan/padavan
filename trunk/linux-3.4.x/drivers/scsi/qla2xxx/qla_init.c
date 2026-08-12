@@ -1566,7 +1566,7 @@ qla2x00_update_fw_options(scsi_qla_host_t *vha)
 	    "Serial link options.\n");
 	ql_dump_buffer(ql_dbg_init + ql_dbg_buffer, vha, 0x0109,
 	    (uint8_t *)&ha->fw_seriallink_options,
-	    sizeof(ha->fw_seriallink_options));
+	    sizeof(ha->fw_seriallink_options), 16);
 
 	ha->fw_options[1] &= ~FO1_SET_EMPHASIS_SWING;
 	if (ha->fw_seriallink_options[3] & BIT_2) {
@@ -2178,7 +2178,7 @@ qla2x00_nvram_config(scsi_qla_host_t *vha)
 	ql_dbg(ql_dbg_init + ql_dbg_buffer, vha, 0x010f,
 	    "Contents of NVRAM.\n");
 	ql_dump_buffer(ql_dbg_init + ql_dbg_buffer, vha, 0x0110,
-	    (uint8_t *)nv, ha->nvram_size);
+	    (uint8_t *)nv, ha->nvram_size, 16);
 
 	/* Bad NVRAM data, set defaults parameters. */
 	if (chksum || nv->id[0] != 'I' || nv->id[1] != 'S' ||
@@ -2666,7 +2666,7 @@ qla2x00_configure_local_loop(scsi_qla_host_t *vha)
 	    "Entries in ID list (%d).\n", entries);
 	ql_dump_buffer(ql_dbg_disc + ql_dbg_buffer, vha, 0x2075,
 	    (uint8_t *)ha->gid_list,
-	    entries * sizeof(struct gid_list_info));
+	    entries * sizeof(struct gid_list_info), 16);
 
 	/* Allocate temporary fcport for any new fcports discovered. */
 	new_fcport = qla2x00_alloc_fcport(vha, GFP_KERNEL);
@@ -4271,7 +4271,7 @@ qla24xx_nvram_config(scsi_qla_host_t *vha)
 	ql_dbg(ql_dbg_init + ql_dbg_buffer, vha, 0x006a,
 	    "Contents of NVRAM\n");
 	ql_dump_buffer(ql_dbg_init + ql_dbg_buffer, vha, 0x010d,
-	    (uint8_t *)nv, ha->nvram_size);
+	    (uint8_t *)nv, ha->nvram_size, 16);
 
 	/* Bad NVRAM data, set defaults parameters. */
 	if (chksum || nv->id[0] != 'I' || nv->id[1] != 'S' || nv->id[2] != 'P'
@@ -5021,7 +5021,7 @@ qla81xx_nvram_config(scsi_qla_host_t *vha)
 	ql_dbg(ql_dbg_init + ql_dbg_buffer, vha, 0x0111,
 	    "Contents of NVRAM:\n");
 	ql_dump_buffer(ql_dbg_init + ql_dbg_buffer, vha, 0x0112,
-	    (uint8_t *)nv, ha->nvram_size);
+	    (uint8_t *)nv, ha->nvram_size, 16);
 
 	/* Bad NVRAM data, set defaults parameters. */
 	if (chksum || nv->id[0] != 'I' || nv->id[1] != 'S' || nv->id[2] != 'P'

@@ -144,7 +144,7 @@ qla2x00_chk_ms_status(scsi_qla_host_t *vha, ms_iocb_entry_t *ms_pkt,
 				    vha->d_id.b.al_pa);
 				ql_dump_buffer(ql_dbg_disc + ql_dbg_buffer, vha,
 				    0x2078, (uint8_t *)&ct_rsp->header,
-				    sizeof(struct ct_rsp_hdr));
+				    sizeof(struct ct_rsp_hdr), 16);
 				rval = QLA_INVALID_COMMAND;
 			} else
 				rval = QLA_SUCCESS;
@@ -772,7 +772,7 @@ qla2x00_sns_ga_nxt(scsi_qla_host_t *vha, fc_port_t *fcport)
 		ql_dbg(ql_dbg_disc + ql_dbg_buffer, vha, 0x2084,
 		    "GA_NXT failed, rejected request ga_nxt_rsp:\n");
 		ql_dump_buffer(ql_dbg_disc + ql_dbg_buffer, vha, 0x2074,
-		    sns_cmd->p.gan_data, 16);
+		    sns_cmd->p.gan_data, 16, 16);
 		rval = QLA_FUNCTION_FAILED;
 	} else {
 		/* Populate fc_port_t entry. */
@@ -849,7 +849,7 @@ qla2x00_sns_gid_pt(scsi_qla_host_t *vha, sw_info_t *list)
 		ql_dbg(ql_dbg_disc, vha, 0x202f,
 		    "GID_PT failed, rejected request, gid_rsp:\n");
 		ql_dump_buffer(ql_dbg_disc + ql_dbg_buffer, vha, 0x2081,
-		    sns_cmd->p.gid_data, 16);
+		    sns_cmd->p.gid_data, 16, 16);
 		rval = QLA_FUNCTION_FAILED;
 	} else {
 		/* Set port IDs in switch info list. */
@@ -919,7 +919,7 @@ qla2x00_sns_gpn_id(scsi_qla_host_t *vha, sw_info_t *list)
 			ql_dbg(ql_dbg_disc + ql_dbg_buffer, vha, 0x207e,
 			    "GPN_ID failed, rejected request, gpn_rsp:\n");
 			ql_dump_buffer(ql_dbg_disc, vha, 0x207f,
-			    sns_cmd->p.gpn_data, 16);
+			    sns_cmd->p.gpn_data, 16, 16);
 			rval = QLA_FUNCTION_FAILED;
 		} else {
 			/* Save portname */
@@ -975,7 +975,7 @@ qla2x00_sns_gnn_id(scsi_qla_host_t *vha, sw_info_t *list)
 			ql_dbg(ql_dbg_disc + ql_dbg_buffer, vha, 0x2082,
 			    "GNN_ID failed, rejected request, gnn_rsp:\n");
 			ql_dump_buffer(ql_dbg_disc + ql_dbg_buffer, vha, 0x207a,
-			    sns_cmd->p.gnn_data, 16);
+			    sns_cmd->p.gnn_data, 16, 16);
 			rval = QLA_FUNCTION_FAILED;
 		} else {
 			/* Save nodename */
@@ -1045,7 +1045,7 @@ qla2x00_sns_rft_id(scsi_qla_host_t *vha)
 		ql_dbg(ql_dbg_disc + ql_dbg_buffer, vha, 0x2083,
 		    "RFT_ID failed, rejected request rft_rsp:\n");
 		ql_dump_buffer(ql_dbg_disc + ql_dbg_buffer, vha, 0x2080,
-		    sns_cmd->p.rft_data, 16);
+		    sns_cmd->p.rft_data, 16, 16);
 		rval = QLA_FUNCTION_FAILED;
 	} else {
 		ql_dbg(ql_dbg_disc, vha, 0x2073,
@@ -1102,7 +1102,7 @@ qla2x00_sns_rnn_id(scsi_qla_host_t *vha)
 		ql_dbg(ql_dbg_disc + ql_dbg_buffer, vha, 0x207b,
 		    "RNN_ID failed, rejected request, rnn_rsp:\n");
 		ql_dump_buffer(ql_dbg_disc + ql_dbg_buffer, vha, 0x207c,
-		    sns_cmd->p.rnn_data, 16);
+		    sns_cmd->p.rnn_data, 16, 16);
 		rval = QLA_FUNCTION_FAILED;
 	} else {
 		ql_dbg(ql_dbg_disc, vha, 0x204c,
@@ -1433,7 +1433,7 @@ qla2x00_fdmi_rhba(scsi_qla_host_t *vha)
 	    ct_req->req.rhba.hba_identifier[6],
 	    ct_req->req.rhba.hba_identifier[7], size);
 	ql_dump_buffer(ql_dbg_disc + ql_dbg_buffer, vha, 0x2076,
-	    entries, size);
+	    entries, size, 16);
 
 	/* Execute MS IOCB */
 	rval = qla2x00_issue_iocb(vha, ha->ms_iocb, ha->ms_iocb_dma,
@@ -1681,7 +1681,7 @@ qla2x00_fdmi_rpa(scsi_qla_host_t *vha)
 	    ct_req->req.rpa.port_name[6], ct_req->req.rpa.port_name[7],
 	    size);
 	ql_dump_buffer(ql_dbg_disc + ql_dbg_buffer, vha, 0x2079,
-	    entries, size);
+	    entries, size, 16);
 
 	/* Execute MS IOCB */
 	rval = qla2x00_issue_iocb(vha, ha->ms_iocb, ha->ms_iocb_dma,

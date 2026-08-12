@@ -446,7 +446,7 @@ extern void qla2x00_dump_buffer(uint8_t *, uint32_t);
 extern void qla2x00_dump_buffer_zipped(uint8_t *, uint32_t);
 extern void ql_dump_regs(uint32_t, scsi_qla_host_t *, int32_t);
 extern void ql_dump_buffer(uint32_t, scsi_qla_host_t *, int32_t,
-	uint8_t *, uint32_t);
+	uint8_t *, uint32_t, uint32_t);
 extern void qla2xxx_dump_post_process(scsi_qla_host_t *, int);
 
 /*
