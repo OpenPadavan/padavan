@@ -114,10 +114,10 @@ static int net_idmap_restore(int argc, const char **argv)
 		if ( (len > 0) && (line[len-1] == '\n') )
 			line[len-1] = '\0';
 
-		if (sscanf(line, "GID %lu %128s", &idval, sid_string) == 2) {
+		if (sscanf(line, "GID %lu %127s", &idval, sid_string) == 2) {
 			map.xid.type = ID_TYPE_GID;
 			map.xid.id = idval;
-		} else if (sscanf(line, "UID %lu %128s", &idval, sid_string) == 2) {
+		} else if (sscanf(line, "UID %lu %127s", &idval, sid_string) == 2) {
 			map.xid.type = ID_TYPE_UID;
 			map.xid.id = idval;
 		} else if (sscanf(line, "USER HWM %lu", &idval) == 1) {
