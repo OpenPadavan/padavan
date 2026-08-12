@@ -2707,7 +2707,7 @@ static size_t merge_default_aces( SEC_ACE *nt_ace_list, size_t num_aces)
 				if (nt_ace_list[i].access_mask == 0) {
 					nt_ace_list[j].flags = SEC_ACE_FLAG_OBJECT_INHERIT|SEC_ACE_FLAG_CONTAINER_INHERIT|
 								(i_inh ? SEC_ACE_FLAG_INHERITED_ACE : 0);
-					if (num_aces - i - 1 > 0)
+					if ((i + 1) < num_aces)
 						memmove(&nt_ace_list[i], &nt_ace_list[i+1], (num_aces-i-1) *
 								sizeof(SEC_ACE));
 
