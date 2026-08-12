@@ -369,13 +369,13 @@ static inline int fc_ct_ms_fill(struct fc_lport *lport,
 				   &entry->type);
 		put_unaligned_be16(len, &entry->len);
 		{
-			char osnamever[FC_FDMI_HBA_ATTR_OSNAMEVERSION_LEN];
-			snprintf(osnamever, sizeof(osnamever),
-				"%s v%s",
-				init_utsname()->sysname,
-				init_utsname()->release);
-			strncpy((char *)&entry->value, osnamever,
-				FC_FDMI_HBA_ATTR_OSNAMEVERSION_LEN);
+			char (*osval)[FC_FDMI_HBA_ATTR_OSNAMEVERSION_LEN];
+
+			osval = (char (*)[FC_FDMI_HBA_ATTR_OSNAMEVERSION_LEN])entry->value;
+			memset(*osval, 0, sizeof(*osval));
+			snprintf(*osval, sizeof(*osval), "%s v%s",
+				 init_utsname()->sysname,
+				 init_utsname()->release);
 		}
 		break;
 	case FC_FDMI_RPA:
