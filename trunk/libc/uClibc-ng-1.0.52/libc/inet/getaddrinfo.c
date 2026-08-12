@@ -402,6 +402,9 @@ gaih_inet(const char *name, const struct gaih_service *service,
 		const struct addrinfo *req, struct addrinfo **pai)
 {
 	struct gaih_servtuple nullserv;
+	struct gaih_servtuple servpool[
+		sizeof(gaih_inet_typeproto) / sizeof(gaih_inet_typeproto[0])
+	];
 
 	const struct gaih_typeproto *tp;
 	struct gaih_servtuple *st;
@@ -449,6 +452,7 @@ gaih_inet(const char *name, const struct gaih_service *service,
 					return rc;
 			} else {
 				struct gaih_servtuple **pst = &st;
+				size_t servcnt = 0;
 				for (tp++; tp->name[0]; tp++) {
 					struct gaih_servtuple *newp;
 
@@ -462,7 +466,7 @@ gaih_inet(const char *name, const struct gaih_service *service,
 					 && req->ai_protocol != tp->protocol)
 						continue;
 
-					newp = alloca(sizeof(struct gaih_servtuple));
+					newp = &servpool[servcnt++];
 					rc = gaih_inet_serv(service->name, tp, req, newp);
 					if (rc) {
 						if (rc & GAIH_OKIFUNSPEC)
@@ -497,10 +501,11 @@ gaih_inet(const char *name, const struct gaih_service *service,
 		 * we know about.
 		 */
 		struct gaih_servtuple **lastp = &st;
+		size_t servcnt = 0;
 		for (++tp; tp->name[0]; ++tp) {
 			struct gaih_servtuple *newp;
 
-			newp = alloca(sizeof(struct gaih_servtuple));
+			newp = &servpool[servcnt++];
 			newp->next = NULL;
 			newp->socktype = tp->socktype;
 			newp->protocol = tp->protocol;
