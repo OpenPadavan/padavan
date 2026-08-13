@@ -5173,7 +5173,7 @@ int ranand_erase_write(char *buf, unsigned int offs, int count)
 			blockaddr = offs & ~blockmask;
 try_next_0:
 			if (ranand_read(block, blockaddr, blocksize) != blocksize) {
-				printf("%s : ranand_read failed\n");
+				printf("%s : ranand_read failed\n", __func__);
 				free(block_orig);
 				return -2;
 			}

@@ -2008,7 +2008,7 @@ int mmc_sdio_disable_func(struct sdio_func *func)
 	return 0;
 
 err:
-	printf("SDIO: Failed to disable device %s\n");
+	printf("SDIO: Failed to disable device\n");
 	return MMC_ERR_FAILED;
 }
 

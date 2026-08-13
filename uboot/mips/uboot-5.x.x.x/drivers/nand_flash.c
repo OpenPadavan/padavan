@@ -92,7 +92,7 @@ static int nfc_all_reset(void)
 		udelay(1);
 	}
 	if (retry <= 0) {
-		printf("%s: controller is still busy?\n");
+		printf("%s: controller is still busy?\n", __func__);
 		return -1;
 	}
 
