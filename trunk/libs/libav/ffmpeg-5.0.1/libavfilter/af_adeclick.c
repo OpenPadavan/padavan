@@ -340,7 +340,7 @@ static int interpolation(DeclickChannel *c, const double *src, int ar_order,
     double *vector, *matrix;
     int i, j;
 
-    av_fast_malloc(&c->matrix, &c->matrix_size, nb_errors * nb_errors * sizeof(*c->matrix));
+    av_fast_malloc(&c->matrix, &c->matrix_size, (size_t)nb_errors * nb_errors * sizeof(*c->matrix));
     matrix = c->matrix;
     if (!matrix)
         return AVERROR(ENOMEM);
