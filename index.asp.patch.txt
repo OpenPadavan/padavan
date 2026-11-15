@@ -1,0 +1,15 @@
+Ridoy.Net index.asp branding patch
+=================================
+
+Target file:
+trunk/user/www/n56u_ribbon_fixed/index.asp
+
+Keep the original HTML, JavaScript, ASP tags, and all router functions.
+Inside function initial(), find this existing line:
+    show_banner(0);
+Immediately AFTER it, insert:
+    document.title = "Ridoy.Net Router";
+
+This is a small insertion patch, NOT a full replacement index.asp.
+Do not replace index.asp with a standalone HTML page: that would remove the
+router's dynamic status, menu, iframe, and ASP-generated values.
