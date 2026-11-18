@@ -1880,10 +1880,10 @@ ipt_nat_rules(char *man_if, char *man_ip,
 	if (is_ridoy_portal) {
 		int portal_http_port = nvram_safe_get_int("http_lanport", 80, 80, 65535);
 		/* Keep DNS on the router so captive clients can resolve the router and trigger HTTP probes. */
-		fprintf(fp, "-I PREROUTING -i %s -p udp --dport 53 -m set ! --match-set ridoy_portal_allow src -j DNAT --to-destination %s:53\n", lan_if, lan_ip);
-		fprintf(fp, "-I PREROUTING -i %s -p tcp --dport 53 -m set ! --match-set ridoy_portal_allow src -j DNAT --to-destination %s:53\n", lan_if, lan_ip);
+		fprintf(fp, "-A PREROUTING -i %s -p udp --dport 53 -m set ! --match-set ridoy_portal_allow src -j DNAT --to-destination %s:53\n", lan_if, lan_ip);
+		fprintf(fp, "-A PREROUTING -i %s -p tcp --dport 53 -m set ! --match-set ridoy_portal_allow src -j DNAT --to-destination %s:53\n", lan_if, lan_ip);
 		/* Redirect only unapproved plain-HTTP requests to the router's existing web server. */
-		fprintf(fp, "-I PREROUTING -i %s -p tcp --dport 80 -m set ! --match-set ridoy_portal_allow src -j REDIRECT --to-ports %d\n", lan_if, portal_http_port);
+		fprintf(fp, "-A PREROUTING -i %s -p tcp --dport 80 -m set ! --match-set ridoy_portal_allow src -j REDIRECT --to-ports %d\n", lan_if, portal_http_port);
 	}
 #endif
 
