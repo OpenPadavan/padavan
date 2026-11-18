@@ -630,7 +630,7 @@ $j(document).ready(function(){
 
     <div class="container-fluid" style="padding-right: 0px">
         <div class="row-fluid">
-            <div class="span3"><center><div id="logo" style="background:url(/bootstrap/img/ridoynet_logo.png?v=ridoynet20261119) center center / contain no-repeat !important;width:182px;height:84px;margin-top:24px;"></div></center></div>
+            <div class="span3"><center><div id="logo" aria-label="Ridoy.Net"></div></center></div>
             <div class="span9" >
                 <div id="TopBanner"></div>
             </div>
