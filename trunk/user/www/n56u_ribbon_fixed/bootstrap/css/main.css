@@ -614,3 +614,16 @@ textarea[readonly] {
     border-radius: 3px 0 0 3px;
 }
 
+
+
+/* Ridoy.Net custom router branding */
+#logo {
+    background-image: url("/bootstrap/img/padavan_logo.png");
+    width: 182px;
+    height: 104px;
+    margin-top: 18px;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+#footer { display: none !important; }
