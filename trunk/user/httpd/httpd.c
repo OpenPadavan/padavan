@@ -990,8 +990,15 @@ handle_request(FILE *conn_fp, const conn_item_t *item)
 		}
 
 		if (!is_router_host && !is_portal_endpoint) {
-			file = "captive_portal.html";
-			query = NULL;
+			char redirect_header[256];
+			const char *portal_ip = is_valid_ipv4(router_ip) ? router_ip : "192.168.0.1";
+			/* Return a real HTTP redirect so Android's captive-portal probe detects sign-in. */
+			snprintf(redirect_header, sizeof(redirect_header),
+				 "Location: http://%s/captive_portal.html", portal_ip);
+			send_headers(302, "Found", redirect_header, "text/html", NULL, conn_fp);
+			fprintf(conn_fp, "<!doctype html><html><body><a href=\"http://%s/captive_portal.html\">Continue to Ridoy.Net</a></body></html>", portal_ip);
+			fflush(conn_fp);
+			return;
 		}
 	}
 #endif
