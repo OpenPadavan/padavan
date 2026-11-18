@@ -637,3 +637,25 @@ textarea[readonly] {
     margin: 0 !important;
     padding: 0 !important;
 }
+
+
+/* Final Ridoy.Net branding — supplied logo on every router tab */
+#logo, .logo {
+    display: block !important;
+    background: transparent url('/bootstrap/img/ridoynet_logo.png?v=ridoynet-logo-all-tabs-20261119f') center center / contain no-repeat !important;
+    width: 220px !important;
+    height: 62px !important;
+    margin: 18px auto 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    box-sizing: border-box !important;
+}
+#logo::after, .logo::after { content: none !important; display: none !important; }
+#footer, #footer * {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}

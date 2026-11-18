@@ -275,10 +275,12 @@ jobs:
           set -euo pipefail
           WWW_DIR="trunk/user/www/n56u_ribbon_fixed"
           LOGO="$WWW_DIR/bootstrap/img/ridoynet_logo.png"
-          CACHE_VERSION="ridoynet-logo-all-tabs-20261119e"
+          CACHE_VERSION="ridoynet-logo-all-tabs-20261119f"
 
           # Every page gets a fresh URL for the shared stylesheet, avoiding old Padavan CSS in browser cache.
           test -s "$LOGO"
+          # Also replace the legacy Padavan-named asset so hard-coded tabs cannot show Padavan branding.
+          cp "$LOGO" "$WWW_DIR/bootstrap/img/padavan_logo.png"
           find "$WWW_DIR" -type f \( -name "*.asp" -o -name "*.htm" -o -name "*.html" \) \
             -exec sed -i -E 's#(/bootstrap/css/main\.css)(\?[^"]*)?#\1?v=ridoynet-logo-all-tabs-20261119e#g' {} +
 
@@ -288,16 +290,18 @@ jobs:
           /* Final shared Ridoy.Net branding: all router tabs */
           #logo, .logo {
             display: block !important;
-            background-color: #ffffff !important;
+            background-color: transparent !important;
             background-image: url('/bootstrap/img/ridoynet_logo.png?v=ridoynet-logo-all-tabs-20261119e') !important;
             background-position: center center !important;
             background-size: contain !important;
             background-repeat: no-repeat !important;
-            width: 168px !important;
-            height: 108px !important;
-            margin: 8px auto 10px !important;
-            border-radius: 6px !important;
+            width: 220px !important;
+            height: 62px !important;
+            margin: 18px auto 0 !important;
+            border-radius: 0 !important;
             box-sizing: border-box !important;
+            border: 0 !important;
+            box-shadow: none !important;
           }
           #footer, #footer * {
             display: none !important;
