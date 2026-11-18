@@ -1071,7 +1071,7 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 #if defined(SUPPORT_RIDOY_PORTAL)
 	/* Unapproved IPv4 clients may reach the router portal but not any routed network. */
 	if (is_ridoy_portal)
-		fprintf(fp, "-A %s -i %s ! -o %s -m set ! --match-set ridoy_portal_allow src -j DROP\n", dtype, lan_if, lan_if);
+		fprintf(fp, "-A %s -s %s ! -o %s -m set ! --match-set ridoy_portal_allow src -j DROP\n", dtype, lan_net, lan_if);
 #endif
 
 	if (i_mac_filter > 0)
@@ -1810,6 +1810,9 @@ ipt_nat_rules(char *man_if, char *man_ip,
 	i_http_proto = 0;
 #endif
 	if (nvram_match("ridoy_portal_enable", "1") && (i_http_proto == 0 || i_http_proto == 2)) {
+		/* Load the IP-set kernel modules before creating the allowlist and rules that use -m set. */
+		module_smart_load("ip_set_hash_ip", NULL);
+		module_smart_load("xt_set", NULL);
 		if (system("/sbin/ipset -exist create ridoy_portal_allow hash:ip family inet timeout 86400") == 0)
 			is_ridoy_portal = 1;
 	}
@@ -1880,10 +1883,10 @@ ipt_nat_rules(char *man_if, char *man_ip,
 	if (is_ridoy_portal) {
 		int portal_http_port = nvram_safe_get_int("http_lanport", 80, 80, 65535);
 		/* Keep DNS on the router so captive clients can resolve the router and trigger HTTP probes. */
-		fprintf(fp, "-A PREROUTING -i %s -p udp --dport 53 -m set ! --match-set ridoy_portal_allow src -j DNAT --to-destination %s:53\n", lan_if, lan_ip);
-		fprintf(fp, "-A PREROUTING -i %s -p tcp --dport 53 -m set ! --match-set ridoy_portal_allow src -j DNAT --to-destination %s:53\n", lan_if, lan_ip);
+		fprintf(fp, "-A PREROUTING -s %s -p udp --dport 53 -m set ! --match-set ridoy_portal_allow src -j DNAT --to-destination %s:53\n", lan_net, lan_ip);
+		fprintf(fp, "-A PREROUTING -s %s -p tcp --dport 53 -m set ! --match-set ridoy_portal_allow src -j DNAT --to-destination %s:53\n", lan_net, lan_ip);
 		/* Redirect only unapproved plain-HTTP requests to the router's existing web server. */
-		fprintf(fp, "-A PREROUTING -i %s -p tcp --dport 80 -m set ! --match-set ridoy_portal_allow src -j REDIRECT --to-ports %d\n", lan_if, portal_http_port);
+		fprintf(fp, "-A PREROUTING -s %s -p tcp --dport 80 -m set ! --match-set ridoy_portal_allow src -j REDIRECT --to-ports %d\n", lan_net, portal_http_port);
 	}
 #endif
 
