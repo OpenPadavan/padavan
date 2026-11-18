@@ -14,7 +14,7 @@ body.body_iframe{
     margin: 0 auto;
 }
 
-#logo { background: url('/bootstrap/img/ridoynet_logo.png?v=ridoynet20261119c') center center / contain no-repeat !important; width: 220px !important; height: 84px !important; margin-top: 18px !important; }
+#logo { background: url('/bootstrap/img/ridoynet_logo.png?v=ridoy-user-logo-20261119d') center center / contain no-repeat !important; width: 220px !important; height: 84px !important; margin-top: 18px !important; }
 #logo:hover {
     cursor: pointer;
 }
@@ -616,13 +616,13 @@ textarea[readonly] {
 
 
 /* Ridoy.Net branding */
-#logo { background: url('/bootstrap/img/ridoynet_logo.png?v=ridoynet20261119c') center center / contain no-repeat !important; width: 220px !important; height: 84px !important; margin-top: 18px !important; }
+#logo { background: url('/bootstrap/img/ridoynet_logo.png?v=ridoy-user-logo-20261119d') center center / contain no-repeat !important; width: 220px !important; height: 84px !important; margin-top: 18px !important; }
 #footer, #footer * { display:none !important; visibility:hidden !important; height:0 !important; margin:0 !important; padding:0 !important; }
 
 
 /* Final user-supplied Ridoy.Net logo: shared header on every router tab */
 #logo {
-    background: #ffffff url('/bootstrap/img/ridoynet_logo.png?v=ridoy-user-logo-20261119') center center / contain no-repeat !important;
+    background: #ffffff url('/bootstrap/img/ridoynet_logo.png?v=ridoy-user-logo-20261119d') center center / contain no-repeat !important;
     width: 168px !important;
     height: 108px !important;
     margin: 8px auto 10px !important;
