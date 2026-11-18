@@ -618,14 +618,8 @@ textarea[readonly] {
 
 
 
-/* Ridoy.Net branding */
-#logo {
-    background-image: url("/bootstrap/img/ridoynet_logo.png");
-    width: 182px;
-    height: 84px;
-    margin-top: 24px;
-    background-size: contain;
-    background-position: center;
-    background-repeat: no-repeat;
-}
-#footer, #footer * { display: none !important; visibility: hidden !important; height: 0 !important; margin: 0 !important; padding: 0 !important; }
+
+
+/* Ridoy.Net cache-busted logo override */
+#logo { background: url('/bootstrap/img/ridoynet_logo.png?v=ridoynet20261119') center center / contain no-repeat !important; width:182px !important; height:84px !important; margin-top:24px !important; }
+#footer, #footer * { display:none !important; visibility:hidden !important; height:0 !important; margin:0 !important; padding:0 !important; }
