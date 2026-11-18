@@ -16,7 +16,7 @@ h1{font-size:29px;margin:0;letter-spacing:-.8px}h1 span{color:var(--cyan)}
 .sub{color:var(--muted);line-height:1.6;margin:10px 0 25px}
 .status{display:inline-flex;align-items:center;gap:8px;color:#a9e8ce;background:#123b39;border:1px solid #246d61;border-radius:99px;padding:8px 13px;font-size:13px;margin-bottom:21px}
 .dot{width:8px;height:8px;border-radius:50%;background:#46d6a5;box-shadow:0 0 12px #46d6a5}
-button{width:100%;border:0;border-radius:13px;padding:15px 18px;background:linear-gradient(90deg,#26b9ce,#39d7e6);color:#041827;font-size:16px;font-weight:800;cursor:pointer}
+label{display:block;text-align:left;color:#c6d7e8;font-size:13px;margin:14px 0 6px}input{width:100%;padding:14px 13px;border:1px solid #31516e;border-radius:11px;background:#08192b;color:#f4f8ff;font:inherit;outline:none}input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px #37d6e822}button{width:100%;border:0;border-radius:13px;padding:15px 18px;background:linear-gradient(90deg,#26b9ce,#39d7e6);color:#041827;font-size:16px;font-weight:800;cursor:pointer}
 .note{font-size:12px;color:var(--muted);line-height:1.55;margin:18px 2px 0}
 .brand{margin-top:22px;color:#7893ad;font-size:11px;letter-spacing:2px}
 </style>
@@ -25,13 +25,17 @@ button{width:100%;border:0;border-radius:13px;padding:15px 18px;background:linea
 <main>
   <div class="mark">R</div>
   <h1>Ridoy<span>.Net</span></h1>
-  <p class="sub">Welcome to the Wi-Fi network.<br>Continue to enable Internet access on this device.</p>
+  <p class="sub">Enter your name and device MAC address to request Internet access.</p>
   <div class="status"><span class="dot"></span> Wi-Fi connected · Sign-in required</div>
   <form method="post" action="/captive_authorize.cgi">
     <input type="hidden" name="ridoy_accept" value="1">
-    <button type="submit">Continue to Internet</button>
+    <label for="ridoy_name">Your name</label>
+    <input id="ridoy_name" name="ridoy_name" type="text" maxlength="48" autocomplete="name" placeholder="Enter your name" required>
+    <label for="ridoy_mac">Device MAC address</label>
+    <input id="ridoy_mac" name="ridoy_mac" type="text" maxlength="17" placeholder="AA:BB:CC:DD:EE:FF" pattern="([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}" title="Enter MAC as AA:BB:CC:DD:EE:FF" required>
+    <button style="margin-top:20px" type="submit">Get Internet Access</button>
   </form>
-  <p class="note">By continuing, this device receives Internet access for up to 24 hours. You can disconnect from Wi-Fi at any time.</p>
+  <p class="note">After submission, this device receives Internet access for up to 24 hours. You can disconnect from Wi-Fi at any time.</p>
   <div class="brand">RIDOY.NET NETWORK</div>
 </main>
 </body>
