@@ -4031,6 +4031,44 @@ ridoy_valid_mac(const char *mac)
 	return 1;
 }
 
+/* Match the submitted MAC against the router's ARP entry for the
+ * actual source IP of this HTTP connection. A format-valid MAC alone
+ * must never authorize a different device. */
+static int
+ridoy_client_mac_matches(const char *client_ip, const char *submitted_mac)
+{
+	FILE *fp;
+	char line[256], arp_ip[64], arp_mac[32];
+
+	if (!client_ip || !submitted_mac)
+		return 0;
+
+	fp = fopen("/proc/net/arp", "r");
+	if (!fp)
+		return 0;
+
+	/* Skip the ARP table header. */
+	if (!fgets(line, sizeof(line), fp)) {
+		fclose(fp);
+		return 0;
+	}
+
+	while (fgets(line, sizeof(line), fp)) {
+		arp_ip[0] = 0;
+		arp_mac[0] = 0;
+		if (sscanf(line, "%63s %*s %*s %31s", arp_ip, arp_mac) == 2 &&
+		    strcmp(arp_ip, client_ip) == 0 &&
+		    strlen(arp_mac) == 17 &&
+		    strcasecmp(arp_mac, submitted_mac) == 0) {
+			fclose(fp);
+			return 1;
+		}
+	}
+
+	fclose(fp);
+	return 0;
+}
+
 static void
 do_ridoy_captive_authorize(const char *url, FILE *stream)
 {
@@ -4045,6 +4083,12 @@ do_ridoy_captive_authorize(const char *url, FILE *stream)
 	    strcmp(get_cgi("ridoy_accept"), "1") != 0 || !is_valid_ipv4(captive_client_ip) ||
 	    !name || !*name || !mac || !ridoy_valid_mac(mac)) {
 		websWrite(stream, "<!doctype html><html><body><h2>Details required</h2><p>Enter your name and a valid MAC address, then try again.</p><a href=\"/captive_portal.html\">Back</a></body></html>");
+		return;
+	}
+
+	/* The submitted MAC must belong to the device making this request. */
+	if (!ridoy_client_mac_matches(captive_client_ip, mac)) {
+		websWrite(stream, "<!doctype html><html><body><h2>Device MAC does not match</h2><p>Internet access was not granted. Check the Wi-Fi MAC address for this network and try again.</p><a href=\"/captive_portal.html\">Back</a></body></html>");
 		return;
 	}
 
