@@ -53,6 +53,9 @@ struct mime_handler {
 };
 
 extern struct mime_handler mime_handlers[];
+#if defined(SUPPORT_RIDOY_PORTAL)
+extern char captive_client_ip[64];
+#endif
 
 /* CGI helper functions */
 extern void init_cgi(char *query);
