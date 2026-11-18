@@ -8,6 +8,7 @@ on:
       - 'trunk/user/www/n56u_ribbon_fixed/bootstrap/css/main.css'
       - 'trunk/user/www/n56u_ribbon_fixed/state.js'
       - 'trunk/user/www/n56u_ribbon_fixed/bootstrap/img/padavan_logo.png'
+      - 'trunk/user/www/n56u_ribbon_fixed/bootstrap/img/ridoynet_logo.png'
       - '.github/workflows/build.yml'
   pull_request:
   workflow_dispatch:
