@@ -4013,7 +4013,34 @@ static char no_cache_IE[] =
 "Expires: -1"
 ;
 
+#if defined(SUPPORT_RIDOY_PORTAL)
+static void
+do_ridoy_captive_authorize(const char *url, FILE *stream)
+{
+	char command[160];
+
+	if (!nvram_match("ridoy_portal_runtime", "1") || !get_cgi("ridoy_accept") ||
+	    strcmp(get_cgi("ridoy_accept"), "1") != 0 || !is_valid_ipv4(captive_client_ip)) {
+		websWrite(stream, "<!doctype html><html><body><h2>Portal request not accepted</h2><p>Please return to the Ridoy.Net Wi-Fi page and try again.</p></body></html>");
+		return;
+	}
+
+	/* The IP comes from the accepted socket, never from a browser-supplied form field. */
+	snprintf(command, sizeof(command), "/sbin/ipset add ridoy_portal_allow %s timeout 86400 -exist", captive_client_ip);
+	if (system(command) != 0) {
+		websWrite(stream, "<!doctype html><html><body><h2>Could not enable Internet access</h2><p>Please reconnect to Wi-Fi and try again.</p></body></html>");
+		return;
+	}
+
+	websWrite(stream, "<!doctype html><html><head><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"1;url=http://connectivitycheck.gstatic.com/generate_204\"><title>Ridoy.Net</title></head><body><h2>Internet access enabled</h2><p>You are connected. This device has access for 24 hours.</p><p><a href=\"http://neverssl.com/\">Continue</a></p><script>setTimeout(function(){location.href='http://connectivitycheck.gstatic.com/generate_204';},900);</script></body></html>");
+}
+#endif
+
 struct mime_handler mime_handlers[] = {
+#if defined(SUPPORT_RIDOY_PORTAL)
+	{ "captive_portal.html", "text/html", no_cache_IE, NULL, do_file, 0 },
+	{ "captive_authorize.cgi*", "text/html", no_cache_IE, do_html_apply_post, do_ridoy_captive_authorize, 0 },
+#endif
 	/* cached javascript files w/o translations */
 	{ "jquery.js", "text/javascript", NULL, NULL, do_file, 0 }, // 2012.06 Eagle23
 	{ "**bootstrap.min.js", "text/javascript", NULL, NULL, do_file, 0 }, // 2012.06 Eagle23
