@@ -6,6 +6,7 @@ on:
     paths:
       - 'trunk/configs/templates/tplink/tl_wr845n-v4.config'
       - 'trunk/user/www/n56u_ribbon_fixed/bootstrap/css/main.css'
+      - 'trunk/user/www/n56u_ribbon_fixed/state.js'
       - 'trunk/user/www/n56u_ribbon_fixed/bootstrap/img/padavan_logo.png'
       - '.github/workflows/build.yml'
   pull_request:
