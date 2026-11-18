@@ -44,6 +44,9 @@ struct nvram_pair router_defaults[] = {
 
 	/* Big switches */
 	{ "fw_enable_x", "1" },
+#if defined(SUPPORT_RIDOY_PORTAL)
+	{ "ridoy_portal_enable", "1" },	/* Redirect new Wi-Fi clients to the Ridoy.Net portal */
+#endif
 
 	/* LAN H/W parameters */
 	{ "lan_hwaddr", "" },			/* LAN interface MAC address */
