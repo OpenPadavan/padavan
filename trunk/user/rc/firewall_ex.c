@@ -787,6 +787,9 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	int is_url_enabled, is_lwf_enabled;
 	int i_vpns_enable, i_vpns_type, i_vpns_actl, i_http_proto, i_bfplimit_ref;
 	int i_vpnc_enable, i_vpnc_type, i_vpnc_sfw, i_mac_filter;
+#if defined(SUPPORT_RIDOY_PORTAL)
+	int is_ridoy_portal = nvram_match("ridoy_portal_runtime", "1");
+#endif
 #if defined (APP_OPENVPN)
 	int i_vpns_ov_mode = nvram_get_int("vpns_ov_mode");
 #endif
@@ -1064,6 +1067,12 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 
 	// FORWARD chain
 	dtype = "FORWARD";
+
+#if defined(SUPPORT_RIDOY_PORTAL)
+	/* Unapproved IPv4 clients may reach the router portal but not any routed network. */
+	if (is_ridoy_portal)
+		fprintf(fp, "-A %s -i %s ! -o %s -m set ! --match-set ridoy_portal_allow src -j DROP\n", dtype, lan_if, lan_if);
+#endif
 
 	if (i_mac_filter > 0)
 		fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, IPT_CHAIN_NAME_MAC_LIST);
@@ -1412,6 +1421,9 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 	int ret, wport, lport;
 	int ipv6_type, is_fw_enabled, is_url_enabled, is_logaccept, is_logdrop;
 	int i_http_proto, i_bfplimit_ref, i_mac_filter;
+#if defined(SUPPORT_RIDOY_PORTAL)
+	int is_ridoy_portal = nvram_match("ridoy_portal_runtime", "1");
+#endif
 	const char *ipt_file = "/tmp/ip6t_filter.rules";
 
 	ret = 0;
@@ -1585,6 +1597,12 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 
 	// FORWARD chain (accept_source_route=0 by default, no needed drop RH0 packet)
 	dtype = "FORWARD";
+
+#if defined(SUPPORT_RIDOY_PORTAL)
+	/* IPv6 is blocked while the IPv4-only portal is active, preventing an IPv6 bypass. */
+	if (is_ridoy_portal)
+		fprintf(fp, "-A %s -i %s ! -o %s -j DROP\n", dtype, lan_if, lan_if);
+#endif
 
 	if (i_mac_filter > 0)
 		fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, IPT_CHAIN_NAME_MAC_LIST);
@@ -1774,6 +1792,9 @@ ipt_nat_rules(char *man_if, char *man_ip,
 	const char *ipt_file = "/tmp/ipt_nat.rules";
 	int wport, lport, is_nat_enabled, is_fw_enabled, is_upnp_enabled;
 	int i_vpns_enable, i_vpnc_enable, i_vpns_type, i_vpnc_type, i_vpnc_sfw, i_http_proto;
+#if defined(SUPPORT_RIDOY_PORTAL)
+	int is_ridoy_portal = 0;
+#endif
 #if defined (APP_OPENVPN)
 	int i_vpns_ov_mode = nvram_get_int("vpns_ov_mode");
 #endif
@@ -1781,6 +1802,19 @@ ipt_nat_rules(char *man_if, char *man_ip,
 	is_nat_enabled = nvram_match("wan_nat_x", "1");
 	is_fw_enabled = nvram_match("fw_enable_x", "1");
 	is_upnp_enabled = nvram_invmatch("upnp_enable_x", "0");
+
+#if defined(SUPPORT_RIDOY_PORTAL)
+#if defined(SUPPORT_HTTPS)
+	i_http_proto = nvram_get_int("http_proto");
+#else
+	i_http_proto = 0;
+#endif
+	if (nvram_match("ridoy_portal_enable", "1") && (i_http_proto == 0 || i_http_proto == 2)) {
+		if (system("/sbin/ipset -exist create ridoy_portal_allow hash:ip family inet timeout 86400") == 0)
+			is_ridoy_portal = 1;
+	}
+	nvram_set_int_temp("ridoy_portal_runtime", is_ridoy_portal);
+#endif
 
 	i_vpns_enable = nvram_get_int("vpns_enable");
 	i_vpnc_enable = nvram_get_int("vpnc_enable");
@@ -1841,6 +1875,17 @@ ipt_nat_rules(char *man_if, char *man_ip,
 	/* pre-routing from VPN client */
 	if (vpnc_if && i_vpnc_sfw == 3)
 		fprintf(fp, "-A PREROUTING -i %s ! -d %s -j %s\n", vpnc_if, lan_net, dtype);
+
+#if defined(SUPPORT_RIDOY_PORTAL)
+	if (is_ridoy_portal) {
+		int portal_http_port = nvram_safe_get_int("http_lanport", 80, 80, 65535);
+		/* Keep DNS on the router so captive clients can resolve the router and trigger HTTP probes. */
+		fprintf(fp, "-I PREROUTING -i %s -p udp --dport 53 -m set ! --match-set ridoy_portal_allow src -j DNAT --to-destination %s:53\n", lan_if, lan_ip);
+		fprintf(fp, "-I PREROUTING -i %s -p tcp --dport 53 -m set ! --match-set ridoy_portal_allow src -j DNAT --to-destination %s:53\n", lan_if, lan_ip);
+		/* Redirect only unapproved plain-HTTP requests to the router's existing web server. */
+		fprintf(fp, "-I PREROUTING -i %s -p tcp --dport 80 -m set ! --match-set ridoy_portal_allow src -j REDIRECT --to-ports %d\n", lan_if, portal_http_port);
+	}
+#endif
 
 	if (is_nat_enabled) {
 		char dmz_ip[16];
