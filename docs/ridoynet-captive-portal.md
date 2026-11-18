@@ -23,10 +23,10 @@ From an authenticated router shell:
 ```sh
 nvram set ridoy_portal_enable=0
 nvram commit
-/sbin/restart_firewall
+reboot
 ```
 
-Re-enable with `nvram set ridoy_portal_enable=1`, then commit and restart the firewall.
+Re-enable with `nvram set ridoy_portal_enable=1`, then run `nvram commit` and `reboot`.
 
 ## Safety / build status
 
