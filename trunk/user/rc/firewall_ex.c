@@ -1601,7 +1601,7 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 #if defined(SUPPORT_RIDOY_PORTAL)
 	/* IPv6 is blocked while the IPv4-only portal is active, preventing an IPv6 bypass. */
 	if (is_ridoy_portal)
-		fprintf(fp, "-A %s -i %s ! -o %s -j DROP\n", dtype, lan_if, lan_if);
+		fprintf(fp, "-A %s ! -o %s -j DROP\n", dtype, lan_if);
 #endif
 
 	if (i_mac_filter > 0)
