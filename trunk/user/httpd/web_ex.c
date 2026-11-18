@@ -4014,25 +4014,67 @@ static char no_cache_IE[] =
 ;
 
 #if defined(SUPPORT_RIDOY_PORTAL)
+static int
+ridoy_valid_mac(const char *mac)
+{
+	int i;
+	if (!mac || strlen(mac) != 17)
+		return 0;
+	for (i = 0; i < 17; i++) {
+		if ((i % 3) == 2) {
+			if (mac[i] != ':')
+				return 0;
+		} else if (!isxdigit((unsigned char)mac[i])) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
 static void
 do_ridoy_captive_authorize(const char *url, FILE *stream)
 {
 	char command[160];
+	char safe_name[49];
+	const char *name = get_cgi("ridoy_name");
+	const char *mac = get_cgi("ridoy_mac");
+	FILE *log;
+	int i, j = 0;
 
 	if (!nvram_match("ridoy_portal_runtime", "1") || !get_cgi("ridoy_accept") ||
-	    strcmp(get_cgi("ridoy_accept"), "1") != 0 || !is_valid_ipv4(captive_client_ip)) {
-		websWrite(stream, "<!doctype html><html><body><h2>Portal request not accepted</h2><p>Please return to the Ridoy.Net Wi-Fi page and try again.</p></body></html>");
+	    strcmp(get_cgi("ridoy_accept"), "1") != 0 || !is_valid_ipv4(captive_client_ip) ||
+	    !name || !*name || !mac || !ridoy_valid_mac(mac)) {
+		websWrite(stream, "<!doctype html><html><body><h2>Details required</h2><p>Enter your name and a valid MAC address, then try again.</p><a href=\"/captive_portal.html\">Back</a></body></html>");
 		return;
 	}
 
-	/* The IP comes from the accepted socket, never from a browser-supplied form field. */
+	for (i = 0; name[i] && j < 48; i++) {
+		unsigned char ch = (unsigned char)name[i];
+		if (isalnum(ch) || ch == ' ' || ch == '_' || ch == '-')
+			safe_name[j++] = (char)ch;
+	}
+	safe_name[j] = 0;
+	if (!j) {
+		websWrite(stream, "<!doctype html><html><body><h2>Invalid name</h2><p>Please enter a name using letters or numbers.</p><a href=\"/captive_portal.html\">Back</a></body></html>");
+		return;
+	}
+
+	/* Grant access to the IP of this HTTP connection; never trust a form-supplied IP. */
 	snprintf(command, sizeof(command), "/sbin/ipset add ridoy_portal_allow %s timeout 86400 -exist", captive_client_ip);
 	if (system(command) != 0) {
-		websWrite(stream, "<!doctype html><html><body><h2>Could not enable Internet access</h2><p>Please reconnect to Wi-Fi and try again.</p></body></html>");
+		websWrite(stream, "<!doctype html><html><body><h2>Could not enable Internet access</h2><p>Please reconnect and try again.</p></body></html>");
 		return;
 	}
 
-	websWrite(stream, "<!doctype html><html><head><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"1;url=http://connectivitycheck.gstatic.com/generate_204\"><title>Ridoy.Net</title></head><body><h2>Internet access enabled</h2><p>You are connected. This device has access for 24 hours.</p><p><a href=\"http://neverssl.com/\">Continue</a></p><script>setTimeout(function(){location.href='http://connectivitycheck.gstatic.com/generate_204';},900);</script></body></html>");
+	log = fopen("/tmp/ridoy_portal_clients.log", "a");
+	if (log) {
+		fprintf(log, "%s\t%s\t%s\n", safe_name, mac, captive_client_ip);
+		fclose(log);
+	}
+
+	websWrite(stream, "<!doctype html><html><head><meta charset=\"utf-8\"><title>Ridoy.Net</title><style>body{background:#071426;color:#f4f8ff;font:16px system-ui;display:grid;place-items:center;min-height:90vh;text-align:center}.box{padding:32px;border:1px solid #23415f;border-radius:20px;background:#10243c}b{color:#37d6e8}</style></head><body><div class=\"box\"><h2>Internet access enabled</h2><p>Welcome, <b>");
+	websWrite(stream, safe_name);
+	websWrite(stream, "</b></p><p>Your device has access for 24 hours.</p><p>You can now open any website.</p></div></body></html>");
 }
 #endif
 
