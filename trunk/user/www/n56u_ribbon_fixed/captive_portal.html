@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#071426">
+<meta name="robots" content="noindex,nofollow">
+<title>Ridoy.Net Wi-Fi</title>
+<style>
+:root{color-scheme:dark;--bg:#071426;--panel:#10243c;--line:#23415f;--cyan:#37d6e8;--text:#f4f8ff;--muted:#a8bdd2}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at 50% 0,#12375a 0,var(--bg) 62%);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--text)}
+main{width:min(100%,420px);padding:34px 26px 28px;background:linear-gradient(160deg,#142d49,#0c1d32);border:1px solid var(--line);border-radius:24px;box-shadow:0 22px 70px #0008;text-align:center}
+.mark{width:76px;height:76px;margin:0 auto 18px;border-radius:22px;display:grid;place-items:center;background:#173d57;border:1px solid #2d7085;color:var(--cyan);font-size:27px;font-weight:850;letter-spacing:-1px}
+h1{font-size:29px;margin:0;letter-spacing:-.8px}h1 span{color:var(--cyan)}
+.sub{color:var(--muted);line-height:1.6;margin:10px 0 25px}
+.status{display:inline-flex;align-items:center;gap:8px;color:#a9e8ce;background:#123b39;border:1px solid #246d61;border-radius:99px;padding:8px 13px;font-size:13px;margin-bottom:21px}
+.dot{width:8px;height:8px;border-radius:50%;background:#46d6a5;box-shadow:0 0 12px #46d6a5}
+button{width:100%;border:0;border-radius:13px;padding:15px 18px;background:linear-gradient(90deg,#26b9ce,#39d7e6);color:#041827;font-size:16px;font-weight:800;cursor:pointer}
+.note{font-size:12px;color:var(--muted);line-height:1.55;margin:18px 2px 0}
+.brand{margin-top:22px;color:#7893ad;font-size:11px;letter-spacing:2px}
+</style>
+</head>
+<body>
+<main>
+  <div class="mark">R</div>
+  <h1>Ridoy<span>.Net</span></h1>
+  <p class="sub">Welcome to the Wi-Fi network.<br>Continue to enable Internet access on this device.</p>
+  <div class="status"><span class="dot"></span> Wi-Fi connected · Sign-in required</div>
+  <form method="post" action="/captive_authorize.cgi">
+    <input type="hidden" name="ridoy_accept" value="1">
+    <button type="submit">Continue to Internet</button>
+  </form>
+  <p class="note">By continuing, this device receives Internet access for up to 24 hours. You can disconnect from Wi-Fi at any time.</p>
+  <div class="brand">RIDOY.NET NETWORK</div>
+</main>
+</body>
+</html>
