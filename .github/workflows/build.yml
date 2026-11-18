@@ -5,6 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'trunk/configs/templates/tplink/tl_wr845n-v4.config'
+      - 'trunk/user/www/n56u_ribbon_fixed/**'
       - 'trunk/user/www/n56u_ribbon_fixed/bootstrap/css/main.css'
       - 'trunk/user/www/n56u_ribbon_fixed/state.js'
       - 'trunk/user/www/n56u_ribbon_fixed/bootstrap/img/padavan_logo.png'
@@ -269,6 +270,43 @@ jobs:
           echo "[$(date -u '+%H:%M:%S')] custom config overrides applied:"
           printf '%s\n' "$CUSTOM_CONFIG"
 
+      - name: Apply Ridoy.Net logo to every web UI tab
+        run: |
+          set -euo pipefail
+          WWW_DIR="trunk/user/www/n56u_ribbon_fixed"
+          LOGO="$WWW_DIR/bootstrap/img/ridoynet_logo.png"
+          CACHE_VERSION="ridoynet-logo-all-tabs-20261119e"
+
+          # Every page gets a fresh URL for the shared stylesheet, avoiding old Padavan CSS in browser cache.
+          test -s "$LOGO"
+          find "$WWW_DIR" -type f \( -name "*.asp" -o -name "*.htm" -o -name "*.html" \) \
+            -exec sed -i -E 's#(/bootstrap/css/main\.css)(\?[^"]*)?#\1?v=ridoynet-logo-all-tabs-20261119e#g' {} +
+
+          # Apply the supplied image logo and keep the footer hidden in every page using the shared stylesheet.
+          cat >> "$WWW_DIR/bootstrap/css/main.css" <<'RIDoyBRANDING'
+          
+          /* Final shared Ridoy.Net branding: all router tabs */
+          #logo, .logo {
+            display: block !important;
+            background-color: #ffffff !important;
+            background-image: url('/bootstrap/img/ridoynet_logo.png?v=ridoynet-logo-all-tabs-20261119e') !important;
+            background-position: center center !important;
+            background-size: contain !important;
+            background-repeat: no-repeat !important;
+            width: 168px !important;
+            height: 108px !important;
+            margin: 8px auto 10px !important;
+            border-radius: 6px !important;
+            box-sizing: border-box !important;
+          }
+          #footer, #footer * {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          RIDoyBRANDING
       - name: Download source tarballs (strongswan)
         working-directory: trunk
         run: |
