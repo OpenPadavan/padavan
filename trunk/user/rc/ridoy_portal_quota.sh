@@ -35,12 +35,13 @@ while IFS="$(printf '\t')" read -r name mac ip stamp quota extra; do
   set -- $old
   prev_rx=${1:-0}; prev_tx=${2:-0}; sum_rx=${3:-0}; sum_tx=${4:-0}
   case "$prev_rx:$prev_tx:$sum_rx:$sum_tx:$rx:$tx" in *[!0-9:]* ) prev_rx=0; prev_tx=0; sum_rx=0; sum_tx=0;; esac
-  if [ "$rx" -ge "$prev_rx" ] 2>/dev/null; then dr=$((rx-prev_rx)); else dr=$rx; fi
-  if [ "$tx" -ge "$prev_tx" ] 2>/dev/null; then dt=$((tx-prev_tx)); else dt=$tx; fi
-  sum_rx=$((sum_rx+dr)); sum_tx=$((sum_tx+dt))
-  total=$((sum_rx+sum_tx))
+  dr=$(awk -v cur="$rx" -v prev="$prev_rx" 'BEGIN { d=cur-prev; if (d<0) d=cur; printf "%.0f", d }')
+  dt=$(awk -v cur="$tx" -v prev="$prev_tx" 'BEGIN { d=cur-prev; if (d<0) d=cur; printf "%.0f", d }')
+  sum_rx=$(awk -v a="$sum_rx" -v d="$dr" 'BEGIN { printf "%.0f", a+d }')
+  sum_tx=$(awk -v a="$sum_tx" -v d="$dt" 'BEGIN { printf "%.0f", a+d }')
+  total=$(awk -v a="$sum_rx" -v b="$sum_tx" 'BEGIN { printf "%.0f", a+b }')
   printf "%s %s %s %s %s\n" "$ip" "$rx" "$tx" "$sum_rx" "$sum_tx" >> "$NEXT"
-  if [ "$total" -ge "$quota" ] 2>/dev/null; then
+  if awk -v used="$total" -v quota="$quota" 'BEGIN { exit !(used >= quota) }'; then
     /sbin/ipset del ridoy_portal_allow "$ip" >/dev/null 2>&1
     logger -t Ridoy.Net "prepaid quota exhausted for $ip ($total/$quota bytes)"
   fi
