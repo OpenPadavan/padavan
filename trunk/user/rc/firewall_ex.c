@@ -858,7 +858,7 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 		module_smart_load("ip_set_hash_ip", NULL);
 		module_smart_load("xt_set", NULL);
 		module_smart_load("xt_quota", NULL);
-		if (system("/sbin/ipset -exist create ridoy_portal_allow hash:ip family inet timeout 2592000") == 0)
+		if (system("/sbin/ipset -exist create ridoy_portal_allow hash:ip family inet") == 0)
 			is_ridoy_portal = 1;
 	}
 	nvram_set_int_temp("ridoy_portal_runtime", is_ridoy_portal);
