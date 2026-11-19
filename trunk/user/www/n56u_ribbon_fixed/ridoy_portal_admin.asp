@@ -88,25 +88,41 @@ function portalAction(action, ip) {
 }
 function portalLoad() {
     var xhr = new XMLHttpRequest();
+    var status = document.getElementById("portalRefreshTime");
+    if (status) status.textContent = "Contacting router…";
     xhr.open("GET", "/ridoy_portal_admin.cgi?action=list&_=" + new Date().getTime(), true);
+    xhr.timeout = 8000;
     xhr.onreadystatechange = function() {
         if (xhr.readyState !== 4) return;
         if (xhr.status !== 200) {
-            portalMessage("Could not load device requests. Please sign in to the router as administrator.", true);
+            if (status) status.textContent = "Router API HTTP error: " + xhr.status;
+            portalMessage("Router API request failed (HTTP " + xhr.status + "). Check router login and CGI route.", true);
             return;
         }
         try {
             var data = JSON.parse(xhr.responseText);
-            if (!data.ok) {
-                portalMessage(data.message || "Portal is not active.", true);
+            if (!data || data.ok !== true) {
+                var reason = data && data.message ? data.message : "Router API returned an unexpected response.";
+                if (status) status.textContent = reason;
+                portalMessage(reason, true);
                 return;
             }
             portalRenderPending(data.pending || []);
             portalRenderApproved(data.approved || []);
-            document.getElementById("portalRefreshTime").textContent = "Updated " + new Date().toLocaleTimeString();
+            if (status) status.textContent = "Connected · Updated " + new Date().toLocaleTimeString();
+            portalMessage("", false);
         } catch(e) {
-            portalMessage("Invalid response from router.", true);
+            if (status) status.textContent = "Router returned non-JSON data.";
+            portalMessage("Invalid router response (HTTP 200). First response: " + String(xhr.responseText || "").substring(0, 120), true);
         }
+    };
+    xhr.ontimeout = function() {
+        if (status) status.textContent = "Router API timed out.";
+        portalMessage("No response from /ridoy_portal_admin.cgi within 8 seconds.", true);
+    };
+    xhr.onerror = function() {
+        if (status) status.textContent = "Network error contacting router.";
+        portalMessage("Network error while contacting the router API.", true);
     };
     xhr.send(null);
 }
@@ -174,11 +190,13 @@ function portalRenderApproved(items) {
     portalPrevious = nextPrevious;
 }
 function initial() {
-    show_banner(0);
-    show_menu(7, 5, 6);
-    show_footer();
+    /* Start the router API request first. A theme/menu JavaScript error
+       must never leave this page stuck on "Waiting for router data". */
     portalLoad();
-    window.setInterval(portalLoad, 4000);
+    window.setInterval(portalLoad, 5000);
+    try { if (typeof show_banner === "function") show_banner(0); } catch(e) {}
+    try { if (typeof show_menu === "function") show_menu(7, 5, 6); } catch(e) {}
+    try { if (typeof show_footer === "function") show_footer(); } catch(e) {}
 }
 </script>
 </head>
