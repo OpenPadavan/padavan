@@ -4155,16 +4155,40 @@ ridoy_load_records(const char *path, ridoy_portal_record_t *records, int max_rec
 }
 
 static int
+ridoy_portal_records_lock(void)
+{
+	int i;
+	for (i = 0; i < 40; i++) {
+		if (mkdir("/var/lock/ridoy_portal_quota.lock", 0700) == 0)
+			return 1;
+		if (errno != EEXIST)
+			return 0;
+		usleep(50000);
+	}
+	return 0;
+}
+
+static void
+ridoy_portal_records_unlock(void)
+{
+	rmdir("/var/lock/ridoy_portal_quota.lock");
+}
+
+static int
 ridoy_save_records(const char *path, ridoy_portal_record_t *records, int count)
 {
 	FILE *fp;
 	char tmp[96];
 	int i;
 
+	if (!ridoy_portal_records_lock())
+		return 0;
 	snprintf(tmp, sizeof(tmp), "%s.tmp", path);
 	fp = fopen(tmp, "w");
-	if (!fp)
+	if (!fp) {
+		ridoy_portal_records_unlock();
 		return 0;
+	}
 
 	for (i = 0; i < count; i++) {
 		if (fprintf(fp, "%s\t%s\t%s\t%lu\t%llu\n",
@@ -4172,13 +4196,16 @@ ridoy_save_records(const char *path, ridoy_portal_record_t *records, int count)
 			    records[i].stamp, records[i].quota_bytes) < 0) {
 			fclose(fp);
 			unlink(tmp);
+			ridoy_portal_records_unlock();
 			return 0;
 		}
 	}
 	if (fclose(fp) != 0 || rename(tmp, path) != 0) {
 		unlink(tmp);
+		ridoy_portal_records_unlock();
 		return 0;
 	}
+	ridoy_portal_records_unlock();
 	return 1;
 }
 
