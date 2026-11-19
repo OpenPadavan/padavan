@@ -202,7 +202,6 @@ function portalRenderApproved(items) {
         var upRate = portalRate(Number(item.tx || 0), old ? old.tx : null, elapsed);
         nextPrevious[item.ip] = {rx:Number(item.rx || 0), tx:Number(item.tx || 0), at:now};
         portalCell(row, item.name);
-        portalCell(row, item.mac);
         portalCell(row, item.ip);
         var status = portalCell(row, "");
         var badge = portalNode("span", item.active ? "Active" : "Expired / Offline");
