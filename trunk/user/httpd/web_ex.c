@@ -4278,6 +4278,7 @@ static int
 ridoy_voucher_allowed(int gb, int days, int *price)
 {
 	switch (gb) {
+	case 0: *price = 0; return (days == 1 || days == 7 || days == 15 || days == 30);
 	case 1: *price = 10; return (days == 1 || days == 7 || days == 15);
 	case 2: *price = 15; return (days == 1 || days == 7 || days == 15);
 	case 5: *price = 30; return (days == 1 || days == 7 || days == 15);
@@ -4431,7 +4432,10 @@ ridoy_voucher_redeem(const char *token, const char *name, const char *ip, const 
 		ok = ridoy_upsert_record(RIDOY_PORTAL_CLIENTS_FILE, &client);
 	if (ok) {
 		char command[128];
-		snprintf(command, sizeof(command), "/sbin/ipset add ridoy_portal_allow %s -exist", ip);
+		if (client.quota_bytes == 0)
+			snprintf(command, sizeof(command), "/sbin/ipset add ridoy_portal_allow %s timeout 0 -exist", ip);
+		else
+			snprintf(command, sizeof(command), "/sbin/ipset add ridoy_portal_allow %s -exist", ip);
 		ok = (system(command) == 0);
 		if (ok) {
 			snprintf(command, sizeof(command), "/sbin/iptables -D RIDoyNetAcct -s %s -j RETURN >/dev/null 2>&1; /sbin/iptables -A RIDoyNetAcct -s %s -j RETURN >/dev/null 2>&1; /sbin/iptables -D RIDoyNetAcct -d %s -j RETURN >/dev/null 2>&1; /sbin/iptables -A RIDoyNetAcct -d %s -j RETURN >/dev/null 2>&1", ip, ip, ip, ip);
@@ -4566,7 +4570,10 @@ do_ridoy_captive_authorize(const char *url, FILE *stream)
 	websWrite(stream, "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Ridoy.Net</title><style>body{background:#071426;color:#f4f8ff;font:16px system-ui;display:grid;place-items:center;min-height:90vh;text-align:center}.box{padding:32px;border:1px solid #23415f;border-radius:20px;background:#10243c}b{color:#37d6e8}</style></head><body><div class=\"box\"><h2>Internet activated</h2><p>Welcome, <b>");
 	websWrite(stream, safe_name);
 	websWrite(stream, "</b></p><p>Your package: <b>");
-	websWrite(stream, "%d GB</b> · ৳%d</p><p>Your token has been used and cannot be redeemed again.</p><p>Internet access will stop when your data is exhausted.</p></div></body></html>", gb, price);
+	if (gb == 0)
+		websWrite(stream, "Unlimited GB</b></p><p>Your token has been used and cannot be redeemed again.</p><p>Your device has unlimited data access.</p></div></body></html>");
+	else
+		websWrite(stream, "%d GB</b> · ৳%d</p><p>Your token has been used and cannot be redeemed again.</p><p>Internet access will stop when your data is exhausted.</p></div></body></html>", gb, price);
 }
 
 static void
@@ -4723,7 +4730,8 @@ do_ridoy_portal_admin(const char *url, FILE *stream)
 		websWrite(stream, ",\"active\":%s,\"rx\":%llu,\"tx\":%llu,\"quota\":%llu,\"remaining\":%llu}",
 			   approved[i].active ? "true" : "false",
 			   approved[i].rx, approved[i].tx, approved[i].quota_bytes,
-			   (approved[i].rx + approved[i].tx >= approved[i].quota_bytes) ? 0ULL : (approved[i].quota_bytes - approved[i].rx - approved[i].tx));
+			   approved[i].quota_bytes == 0 ? 0ULL :
+			   ((approved[i].rx + approved[i].tx >= approved[i].quota_bytes) ? 0ULL : (approved[i].quota_bytes - approved[i].rx - approved[i].tx)));
 	}
 	websWrite(stream, "]}");
 }
