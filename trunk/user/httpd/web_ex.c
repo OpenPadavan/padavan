@@ -4516,6 +4516,21 @@ ridoy_portal_admin_action(const char *action, const char *ip, FILE *stream)
 	char command[192];
 	ridoy_portal_record_t record;
 
+	if (strcmp(action, "create_token") == 0) {
+		char token[33];
+		int gb = get_cgi("gb") ? atoi(get_cgi("gb")) : 0;
+		int days = get_cgi("validity") ? atoi(get_cgi("validity")) : 0;
+		int price = 0;
+		if (!ridoy_voucher_create(gb, days, token, sizeof(token), &price)) {
+			ridoy_portal_admin_result(stream, 0, "Invalid package/validity or token storage unavailable.");
+			return;
+		}
+		websWrite(stream, "{\"ok\":true,\"message\":\"Voucher created. Copy it now; it is shown only once.\",\"token\":");
+		ridoy_json_string(stream, token);
+		websWrite(stream, ",\"gb\":%d,\"price\":%d,\"validity_days\":%d}", gb, price, days);
+		return;
+	}
+
 	if (!ip || !is_valid_ipv4(ip)) {
 		ridoy_portal_admin_result(stream, 0, "Invalid device IP address.");
 		return;
