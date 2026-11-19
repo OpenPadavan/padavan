@@ -836,7 +836,7 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	if (i_http_proto == 0 || i_http_proto == 2) {
 		module_smart_load("ip_set_hash_ip", NULL);
 		module_smart_load("xt_set", NULL);
-		if (system("/sbin/ipset -exist create ridoy_portal_allow hash:ip family inet timeout 86400") == 0)
+		if (system("/sbin/ipset -exist create ridoy_portal_allow hash:ip family inet timeout 2592000") == 0)
 			is_ridoy_portal = 1;
 	}
 	nvram_set_int_temp("ridoy_portal_runtime", is_ridoy_portal);
@@ -1865,7 +1865,7 @@ ipt_nat_rules(char *man_if, char *man_ip,
 		/* Load the IP-set kernel modules before creating the allowlist and rules that use -m set. */
 		module_smart_load("ip_set_hash_ip", NULL);
 		module_smart_load("xt_set", NULL);
-		if (system("/sbin/ipset -exist create ridoy_portal_allow hash:ip family inet timeout 86400") == 0)
+		if (system("/sbin/ipset -exist create ridoy_portal_allow hash:ip family inet timeout 2592000") == 0)
 			is_ridoy_portal = 1;
 	}
 	nvram_set_int_temp("ridoy_portal_runtime", is_ridoy_portal);
