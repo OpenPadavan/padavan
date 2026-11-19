@@ -4158,6 +4158,7 @@ static int
 ridoy_portal_records_lock(void)
 {
 	int i;
+	mkdir("/var/lock", 0755);
 	for (i = 0; i < 40; i++) {
 		if (mkdir("/var/lock/ridoy_portal_quota.lock", 0700) == 0)
 			return 1;
@@ -4504,10 +4505,10 @@ ridoy_read_accounting(ridoy_portal_record_t *records, int count)
 	/* Prefer persistent cumulative totals so router/firewall restarts do not reset usage. */
 	fp = fopen("/etc/storage/ridoy_portal_usage.state", "r");
 	if (fp) {
-		char state_ip[16];
+		char state_mac[18], state_ip[16];
 		unsigned long long prev_rx, prev_tx, total_rx, total_tx;
-		while (fscanf(fp, "%15s %llu %llu %llu %llu", state_ip, &prev_rx, &prev_tx, &total_rx, &total_tx) == 5) {
-			for (i = 0; i < count; i++) if (strcmp(records[i].ip, state_ip) == 0) {
+		while (fscanf(fp, "%17s %15s %llu %llu %llu %llu", state_mac, state_ip, &prev_rx, &prev_tx, &total_rx, &total_tx) == 6) {
+			for (i = 0; i < count; i++) if (strcasecmp(records[i].mac, state_mac) == 0) {
 				records[i].rx = total_rx;
 				records[i].tx = total_tx;
 			}
