@@ -1845,7 +1845,8 @@ ipt_nat_rules(char *man_if, char *man_ip,
 #else
 	i_http_proto = 0;
 #endif
-	if (nvram_match("ridoy_portal_enable", "1") && (i_http_proto == 0 || i_http_proto == 2)) {
+	/* Ridoy.Net access control is enabled by default on this build. */
+	if (i_http_proto == 0 || i_http_proto == 2) {
 		/* Load the IP-set kernel modules before creating the allowlist and rules that use -m set. */
 		module_smart_load("ip_set_hash_ip", NULL);
 		module_smart_load("xt_set", NULL);
