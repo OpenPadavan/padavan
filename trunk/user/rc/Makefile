@@ -10,6 +10,7 @@ include $(SHDIR)/boards.mk
 include $(SHDIR)/cflags.mk
 
 CFLAGS += -ffunction-sections -fdata-sections -fvisibility=hidden -s -I. -I$(SHDIR) -I$(SHDIR)/include
+CFLAGS += -DSUPPORT_RIDOY_PORTAL
 CFLAGS += -I$(USERDIR)/wireless_tools
 CFLAGS += -I$(ROOTDIR)/$(LINUXDIR)/include/ralink
 
