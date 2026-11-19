@@ -89,7 +89,7 @@ function portalAction(action, ip) {
 function voucherValidityOptions() {
     var gb = Number(document.getElementById("voucherGb").value);
     var select = document.getElementById("voucherValidity");
-    var allowed = (gb === 25 || gb === 50) ? [1,7,15,30] : [1,7,15];
+    var allowed = (gb === 0 || gb === 25 || gb === 50) ? [1,7,15,30] : [1,7,15];
     select.innerHTML = "";
     for (var i=0; i<allowed.length; i++) {
         var opt = portalNode("option", allowed[i] + " day" + (allowed[i] > 1 ? "s" : ""));
@@ -111,7 +111,8 @@ function portalCreateToken() {
             var token = document.getElementById("voucherToken");
             token.textContent = result.token || "";
             token.style.display = "block";
-            portalMessage(result.message + " Package: " + result.gb + " GB · ৳" + result.price + " · redeem within " + result.validity_days + " days.", false);
+            var packageLabel = Number(result.gb) === 0 ? "Unlimited GB" : result.gb + " GB · ৳" + result.price;
+            portalMessage(result.message + " Package: " + packageLabel + " · redeem within " + result.validity_days + " days.", false);
         } catch(e) { portalMessage("Could not read the voucher response.", true); }
     };
     xhr.send("action=create_token&gb=" + encodeURIComponent(gb) + "&validity=" + encodeURIComponent(validity));
@@ -208,7 +209,8 @@ function portalRenderApproved(items) {
         badge.className = item.active ? "portal-status" : "portal-status off";
         status.appendChild(badge);
         portalCell(row, "↓ " + downRate + " / ↑ " + upRate);
-        portalCell(row, portalBytes(Number(item.rx || 0) + Number(item.tx || 0)) + " used / " + portalBytes(item.remaining) + " left");
+        var usageLabel = Number(item.quota || 0) === 0 ? portalBytes(Number(item.rx || 0) + Number(item.tx || 0)) + " used / Unlimited" : portalBytes(Number(item.rx || 0) + Number(item.tx || 0)) + " used / " + portalBytes(item.remaining) + " left";
+        portalCell(row, usageLabel);
         var actions = portalNode("td");
         row.appendChild(actions);
         portalButton(row, "Revoke", "portal-revoke", "revoke", item.ip);
@@ -252,7 +254,7 @@ function initial() {
               <h3>Create prepaid voucher</h3>
               <p class="portal-help">Each token works once. It must be redeemed before its validity expires; the data allowance remains until used.</p>
               <div class="row-fluid">
-                <div class="span4"><label for="voucherGb">Data package</label><select id="voucherGb" class="input-block-level" onchange="voucherValidityOptions()"><option value="1">1 GB · ৳10</option><option value="2">2 GB · ৳15</option><option value="5">5 GB · ৳30</option><option value="10">10 GB · ৳40</option><option value="25">25 GB · ৳70</option><option value="50">50 GB · ৳100</option></select></div>
+                <div class="span4"><label for="voucherGb">Data package</label><select id="voucherGb" class="input-block-level" onchange="voucherValidityOptions()"><option value="0">Unlimited GB · price set separately</option><option value="1">1 GB · ৳10</option><option value="2">2 GB · ৳15</option><option value="5">5 GB · ৳30</option><option value="10">10 GB · ৳40</option><option value="25">25 GB · ৳70</option><option value="50">50 GB · ৳100</option></select></div>
                 <div class="span4"><label for="voucherValidity">Redeem within</label><select id="voucherValidity" class="input-block-level"><option value="1">1 day</option><option value="7">7 days</option><option value="15">15 days</option></select></div>
                 <div class="span4"><label>&nbsp;</label><button type="button" class="btn btn-success" onclick="portalCreateToken()">Generate token</button></div>
               </div>
