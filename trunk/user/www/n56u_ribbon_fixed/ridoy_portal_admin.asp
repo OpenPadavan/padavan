@@ -137,7 +137,6 @@ function portalLoad() {
                 portalMessage(reason, true);
                 return;
             }
-            portalRenderPending(data.pending || []);
             portalRenderApproved(data.approved || []);
             if (status) status.textContent = "Connected · Updated " + new Date().toLocaleTimeString();
             portalMessage("", false);
