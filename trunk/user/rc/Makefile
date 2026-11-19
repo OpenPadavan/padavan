@@ -83,6 +83,7 @@ clean:
 
 romfs:
 	$(ROMFSINST) /sbin/$(EXEC)
+	$(ROMFSINST) ridoy_portal_quota.sh /usr/sbin/ridoy_portal_quota.sh
 	cd $(INSTALLDIR) && rm -f init && ln -sf sbin/rc init
 	cd $(INSTALLDIR)/sbin && ln -sf rc init
 	cd $(INSTALLDIR)/sbin && ln -sf rc watchdog
