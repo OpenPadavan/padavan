@@ -4014,6 +4014,22 @@ static char no_cache_IE[] =
 ;
 
 #if defined(SUPPORT_RIDOY_PORTAL)
+#define RIDOY_PORTAL_PENDING_FILE "/tmp/ridoy_portal_pending.log"
+#define RIDOY_PORTAL_CLIENTS_FILE "/tmp/ridoy_portal_clients.log"
+#define RIDOY_PORTAL_MAX_CLIENTS 64
+
+typedef struct ridoy_portal_record {
+	char name[49];
+	char mac[18];
+	char ip[16];
+	unsigned long stamp;
+	unsigned long long rx;
+	unsigned long long tx;
+	int active;
+} ridoy_portal_record_t;
+
+static int ridoy_portal_admin_post = 0;
+
 static int
 ridoy_valid_mac(const char *mac)
 {
@@ -4031,9 +4047,8 @@ ridoy_valid_mac(const char *mac)
 	return 1;
 }
 
-/* Match the submitted MAC against the router's ARP entry for the
- * actual source IP of this HTTP connection. A format-valid MAC alone
- * must never authorize a different device. */
+/* The submitted MAC must match the router's ARP entry for the
+ * actual source IP. Never trust a MAC or IP supplied by the form alone. */
 static int
 ridoy_client_mac_matches(const char *client_ip, const char *submitted_mac)
 {
@@ -4047,7 +4062,6 @@ ridoy_client_mac_matches(const char *client_ip, const char *submitted_mac)
 	if (!fp)
 		return 0;
 
-	/* Skip the ARP table header. */
 	if (!fgets(line, sizeof(line), fp)) {
 		fclose(fp);
 		return 0;
@@ -4069,26 +4083,206 @@ ridoy_client_mac_matches(const char *client_ip, const char *submitted_mac)
 	return 0;
 }
 
+static int
+ridoy_parse_record(const char *line, ridoy_portal_record_t *record)
+{
+	unsigned long stamp = 0;
+	int n;
+
+	if (!line || !record)
+		return 0;
+
+	memset(record, 0, sizeof(*record));
+	n = sscanf(line, "%48[^\t]\t%17[^\t]\t%15[^\t]\t%lu",
+		   record->name, record->mac, record->ip, &stamp);
+	if (n < 3 || !record->name[0] ||
+	    !ridoy_valid_mac(record->mac) || !is_valid_ipv4(record->ip))
+		return 0;
+
+	record->stamp = (n >= 4) ? stamp : 0;
+	return 1;
+}
+
+static int
+ridoy_load_records(const char *path, ridoy_portal_record_t *records, int max_records)
+{
+	FILE *fp;
+	char line[192];
+	int count = 0;
+
+	fp = fopen(path, "r");
+	if (!fp)
+		return 0;
+
+	while (count < max_records && fgets(line, sizeof(line), fp)) {
+		ridoy_portal_record_t record;
+		if (ridoy_parse_record(line, &record))
+			records[count++] = record;
+	}
+	fclose(fp);
+	return count;
+}
+
+static int
+ridoy_save_records(const char *path, ridoy_portal_record_t *records, int count)
+{
+	FILE *fp;
+	char tmp[96];
+	int i;
+
+	snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+	fp = fopen(tmp, "w");
+	if (!fp)
+		return 0;
+
+	for (i = 0; i < count; i++) {
+		if (fprintf(fp, "%s\t%s\t%s\t%lu\n",
+			    records[i].name, records[i].mac, records[i].ip,
+			    records[i].stamp) < 0) {
+			fclose(fp);
+			unlink(tmp);
+			return 0;
+		}
+	}
+	if (fclose(fp) != 0 || rename(tmp, path) != 0) {
+		unlink(tmp);
+		return 0;
+	}
+	return 1;
+}
+
+static int
+ridoy_upsert_record(const char *path, const ridoy_portal_record_t *record)
+{
+	ridoy_portal_record_t records[RIDOY_PORTAL_MAX_CLIENTS];
+	int count, keep = 0, i;
+
+	count = ridoy_load_records(path, records, RIDOY_PORTAL_MAX_CLIENTS);
+	for (i = 0; i < count; i++) {
+		if (strcmp(records[i].ip, record->ip) == 0 ||
+		    strcasecmp(records[i].mac, record->mac) == 0)
+			continue;
+		records[keep++] = records[i];
+	}
+	if (keep >= RIDOY_PORTAL_MAX_CLIENTS)
+		return 0;
+	records[keep++] = *record;
+	return ridoy_save_records(path, records, keep);
+}
+
+static int
+ridoy_remove_record(const char *path, const char *ip)
+{
+	ridoy_portal_record_t records[RIDOY_PORTAL_MAX_CLIENTS];
+	int count, keep = 0, i;
+
+	count = ridoy_load_records(path, records, RIDOY_PORTAL_MAX_CLIENTS);
+	for (i = 0; i < count; i++) {
+		if (strcmp(records[i].ip, ip) != 0)
+			records[keep++] = records[i];
+	}
+	return ridoy_save_records(path, records, keep);
+}
+
+static int
+ridoy_find_record(const char *path, const char *ip, ridoy_portal_record_t *record)
+{
+	ridoy_portal_record_t records[RIDOY_PORTAL_MAX_CLIENTS];
+	int count, i;
+
+	count = ridoy_load_records(path, records, RIDOY_PORTAL_MAX_CLIENTS);
+	for (i = 0; i < count; i++) {
+		if (strcmp(records[i].ip, ip) == 0) {
+			*record = records[i];
+			return 1;
+		}
+	}
+	return 0;
+}
+
+static void
+ridoy_json_string(FILE *stream, const char *value)
+{
+	const unsigned char *p = (const unsigned char *)(value ? value : "");
+	websWrite(stream, "\"");
+	while (*p) {
+		if (*p == '"' || *p == '\\')
+			websWrite(stream, "\\%c", *p);
+		else if (*p < 32)
+			websWrite(stream, "\\u%04x", (unsigned int)*p);
+		else
+			websWrite(stream, "%c", *p);
+		p++;
+	}
+	websWrite(stream, "\"");
+}
+
+static void
+ridoy_read_accounting(ridoy_portal_record_t *records, int count)
+{
+	FILE *fp;
+	char line[512], token[64];
+	unsigned long long packets, bytes;
+	int i;
+
+	for (i = 0; i < count; i++) {
+		records[i].rx = 0;
+		records[i].tx = 0;
+	}
+
+	fp = popen("/sbin/iptables-save -c -t filter 2>/dev/null", "r");
+	if (!fp)
+		return;
+
+	while (fgets(line, sizeof(line), fp)) {
+		char *slash;
+		if (sscanf(line, "[%llu:%llu] -A RIDoyNetAcct -s %63s",
+			   &packets, &bytes, token) == 3) {
+			slash = strchr(token, '/');
+			if (slash) *slash = 0;
+			for (i = 0; i < count; i++)
+				if (strcmp(records[i].ip, token) == 0)
+					records[i].tx = bytes;
+		} else if (sscanf(line, "[%llu:%llu] -A RIDoyNetAcct -d %63s",
+				  &packets, &bytes, token) == 3) {
+			slash = strchr(token, '/');
+			if (slash) *slash = 0;
+			for (i = 0; i < count; i++)
+				if (strcmp(records[i].ip, token) == 0)
+					records[i].rx = bytes;
+		}
+	}
+	pclose(fp);
+}
+
+static int
+ridoy_ipset_is_allowed(const char *ip)
+{
+	char command[128];
+	snprintf(command, sizeof(command),
+		 "/sbin/ipset test ridoy_portal_allow %s >/dev/null 2>&1", ip);
+	return (system(command) == 0);
+}
+
 static void
 do_ridoy_captive_authorize(const char *url, FILE *stream)
 {
-	char command[160];
 	char safe_name[49];
 	const char *name = get_cgi("ridoy_name");
 	const char *mac = get_cgi("ridoy_mac");
-	FILE *log;
+	ridoy_portal_record_t request;
 	int i, j = 0;
 
-	if (!nvram_match("ridoy_portal_runtime", "1") || !get_cgi("ridoy_accept") ||
-	    strcmp(get_cgi("ridoy_accept"), "1") != 0 || !is_valid_ipv4(captive_client_ip) ||
-	    !name || !*name || !mac || !ridoy_valid_mac(mac)) {
+	if (!nvram_match("ridoy_portal_runtime", "1") ||
+	    !get_cgi("ridoy_accept") || strcmp(get_cgi("ridoy_accept"), "1") != 0 ||
+	    !is_valid_ipv4(captive_client_ip) || !name || !*name ||
+	    !mac || !ridoy_valid_mac(mac)) {
 		websWrite(stream, "<!doctype html><html><body><h2>Details required</h2><p>Enter your name and a valid MAC address, then try again.</p><a href=\"/captive_portal.html\">Back</a></body></html>");
 		return;
 	}
 
-	/* The submitted MAC must belong to the device making this request. */
 	if (!ridoy_client_mac_matches(captive_client_ip, mac)) {
-		websWrite(stream, "<!doctype html><html><body><h2>Device MAC does not match</h2><p>Internet access was not granted. Check the Wi-Fi MAC address for this network and try again.</p><a href=\"/captive_portal.html\">Back</a></body></html>");
+		websWrite(stream, "<!doctype html><html><body><h2>Device MAC does not match</h2><p>Your request was not accepted. Check the Wi-Fi MAC address for this network and try again.</p><a href=\"/captive_portal.html\">Back</a></body></html>");
 		return;
 	}
 
@@ -4103,22 +4297,163 @@ do_ridoy_captive_authorize(const char *url, FILE *stream)
 		return;
 	}
 
-	/* Grant access to the IP of this HTTP connection; never trust a form-supplied IP. */
-	snprintf(command, sizeof(command), "/sbin/ipset add ridoy_portal_allow %s timeout 86400 -exist", captive_client_ip);
-	if (system(command) != 0) {
-		websWrite(stream, "<!doctype html><html><body><h2>Could not enable Internet access</h2><p>Please reconnect and try again.</p></body></html>");
+	memset(&request, 0, sizeof(request));
+	snprintf(request.name, sizeof(request.name), "%s", safe_name);
+	snprintf(request.mac, sizeof(request.mac), "%s", mac);
+	snprintf(request.ip, sizeof(request.ip), "%s", captive_client_ip);
+	request.stamp = (unsigned long)time(NULL);
+
+	if (!ridoy_upsert_record(RIDOY_PORTAL_PENDING_FILE, &request)) {
+		websWrite(stream, "<!doctype html><html><body><h2>Request queue is full</h2><p>Please contact the network owner.</p></body></html>");
 		return;
 	}
 
-	log = fopen("/tmp/ridoy_portal_clients.log", "a");
-	if (log) {
-		fprintf(log, "%s\t%s\t%s\n", safe_name, mac, captive_client_ip);
-		fclose(log);
+	websWrite(stream, "<!doctype html><html><head><meta charset=\"utf-8\"><title>Ridoy.Net</title><style>body{background:#071426;color:#f4f8ff;font:16px system-ui;display:grid;place-items:center;min-height:90vh;text-align:center}.box{padding:32px;border:1px solid #23415f;border-radius:20px;background:#10243c}b{color:#37d6e8}</style></head><body><div class=\"box\"><h2>Request submitted</h2><p>Welcome, <b>");
+	websWrite(stream, safe_name);
+	websWrite(stream, "</b></p><p>Your request is waiting for the network owner to approve it.</p><p>Internet access will start only after approval.</p></div></body></html>");
+}
+
+static void
+do_ridoy_portal_admin_post(const char *url, FILE *stream, int clen, char *boundary)
+{
+	ridoy_portal_admin_post = 1;
+	do_html_apply_post(url, stream, clen, boundary);
+}
+
+static void
+ridoy_portal_admin_result(FILE *stream, int ok, const char *message)
+{
+	websWrite(stream, "{\"ok\":%s,\"message\":", ok ? "true" : "false");
+	ridoy_json_string(stream, message);
+	websWrite(stream, "}");
+}
+
+static void
+ridoy_portal_admin_action(const char *action, const char *ip, FILE *stream)
+{
+	char command[192];
+	ridoy_portal_record_t record;
+
+	if (!ip || !is_valid_ipv4(ip)) {
+		ridoy_portal_admin_result(stream, 0, "Invalid device IP address.");
+		return;
 	}
 
-	websWrite(stream, "<!doctype html><html><head><meta charset=\"utf-8\"><title>Ridoy.Net</title><style>body{background:#071426;color:#f4f8ff;font:16px system-ui;display:grid;place-items:center;min-height:90vh;text-align:center}.box{padding:32px;border:1px solid #23415f;border-radius:20px;background:#10243c}b{color:#37d6e8}</style></head><body><div class=\"box\"><h2>Internet access enabled</h2><p>Welcome, <b>");
-	websWrite(stream, safe_name);
-	websWrite(stream, "</b></p><p>Your device has access for 24 hours.</p><p>You can now open any website.</p></div></body></html>");
+	if (strcmp(action, "approve") == 0) {
+		if (!ridoy_find_record(RIDOY_PORTAL_PENDING_FILE, ip, &record)) {
+			ridoy_portal_admin_result(stream, 0, "This request is no longer pending.");
+			return;
+		}
+		if (!ridoy_client_mac_matches(record.ip, record.mac)) {
+			ridoy_portal_admin_result(stream, 0, "Device is no longer on this IP/MAC. Ask it to reconnect and request access again.");
+			return;
+		}
+		snprintf(command, sizeof(command),
+			 "/sbin/ipset add ridoy_portal_allow %s timeout 86400 -exist", record.ip);
+		if (system(command) != 0) {
+			ridoy_portal_admin_result(stream, 0, "Could not add this device to the allow list.");
+			return;
+		}
+		record.stamp = (unsigned long)time(NULL);
+		if (!ridoy_upsert_record(RIDOY_PORTAL_CLIENTS_FILE, &record)) {
+			snprintf(command, sizeof(command), "/sbin/ipset del ridoy_portal_allow %s >/dev/null 2>&1", record.ip);
+			system(command);
+			ridoy_portal_admin_result(stream, 0, "Could not save the approved-device record.");
+			return;
+		}
+		ridoy_remove_record(RIDOY_PORTAL_PENDING_FILE, record.ip);
+		snprintf(command, sizeof(command),
+			 "/sbin/iptables -D RIDoyNetAcct -s %s -j RETURN >/dev/null 2>&1; /sbin/iptables -A RIDoyNetAcct -s %s -j RETURN >/dev/null 2>&1",
+			 record.ip, record.ip);
+		system(command);
+		snprintf(command, sizeof(command),
+			 "/sbin/iptables -D RIDoyNetAcct -d %s -j RETURN >/dev/null 2>&1; /sbin/iptables -A RIDoyNetAcct -d %s -j RETURN >/dev/null 2>&1",
+			 record.ip, record.ip);
+		system(command);
+		ridoy_portal_admin_result(stream, 1, "Device approved. Internet access is enabled for 24 hours.");
+		return;
+	}
+
+	if (strcmp(action, "reject") == 0) {
+		if (!ridoy_remove_record(RIDOY_PORTAL_PENDING_FILE, ip)) {
+			ridoy_portal_admin_result(stream, 0, "Could not update the pending-request list.");
+			return;
+		}
+		ridoy_portal_admin_result(stream, 1, "Request rejected. Internet remains blocked.");
+		return;
+	}
+
+	if (strcmp(action, "revoke") == 0) {
+		snprintf(command, sizeof(command), "/sbin/ipset del ridoy_portal_allow %s >/dev/null 2>&1", ip);
+		system(command);
+		snprintf(command, sizeof(command), "/sbin/iptables -D RIDoyNetAcct -s %s -j RETURN >/dev/null 2>&1", ip);
+		system(command);
+		snprintf(command, sizeof(command), "/sbin/iptables -D RIDoyNetAcct -d %s -j RETURN >/dev/null 2>&1", ip);
+		system(command);
+		if (!ridoy_remove_record(RIDOY_PORTAL_CLIENTS_FILE, ip)) {
+			ridoy_portal_admin_result(stream, 0, "Access was revoked, but the device record could not be updated.");
+			return;
+		}
+		ridoy_portal_admin_result(stream, 1, "Internet access revoked.");
+		return;
+	}
+
+	ridoy_portal_admin_result(stream, 0, "Unknown action.");
+}
+
+static void
+do_ridoy_portal_admin(const char *url, FILE *stream)
+{
+	ridoy_portal_record_t pending[RIDOY_PORTAL_MAX_CLIENTS];
+	ridoy_portal_record_t approved[RIDOY_PORTAL_MAX_CLIENTS];
+	const char *action = get_cgi("action");
+	const char *ip = get_cgi("ip");
+	int was_post = ridoy_portal_admin_post;
+	int pending_count, approved_count, i;
+
+	ridoy_portal_admin_post = 0;
+
+	if (!nvram_match("ridoy_portal_runtime", "1")) {
+		ridoy_portal_admin_result(stream, 0, "Ridoy.Net captive portal is not active.");
+		return;
+	}
+
+	/* Mutating actions are accepted only from POST requests, never GET links. */
+	if (was_post) {
+		if (!action) {
+			ridoy_portal_admin_result(stream, 0, "Missing action.");
+			return;
+		}
+		ridoy_portal_admin_action(action, ip, stream);
+		return;
+	}
+
+	pending_count = ridoy_load_records(RIDOY_PORTAL_PENDING_FILE, pending, RIDOY_PORTAL_MAX_CLIENTS);
+	approved_count = ridoy_load_records(RIDOY_PORTAL_CLIENTS_FILE, approved, RIDOY_PORTAL_MAX_CLIENTS);
+	ridoy_read_accounting(approved, approved_count);
+
+	for (i = 0; i < approved_count; i++)
+		approved[i].active = ridoy_ipset_is_allowed(approved[i].ip);
+
+	websWrite(stream, "{\"ok\":true,\"pending\":[");
+	for (i = 0; i < pending_count; i++) {
+		if (i) websWrite(stream, ",");
+		websWrite(stream, "{\"name\":"); ridoy_json_string(stream, pending[i].name);
+		websWrite(stream, ",\"mac\":"); ridoy_json_string(stream, pending[i].mac);
+		websWrite(stream, ",\"ip\":"); ridoy_json_string(stream, pending[i].ip);
+		websWrite(stream, ",\"stamp\":%lu}", pending[i].stamp);
+	}
+	websWrite(stream, "],\"approved\":[");
+	for (i = 0; i < approved_count; i++) {
+		if (i) websWrite(stream, ",");
+		websWrite(stream, "{\"name\":"); ridoy_json_string(stream, approved[i].name);
+		websWrite(stream, ",\"mac\":"); ridoy_json_string(stream, approved[i].mac);
+		websWrite(stream, ",\"ip\":"); ridoy_json_string(stream, approved[i].ip);
+		websWrite(stream, ",\"active\":%s,\"rx\":%llu,\"tx\":%llu}",
+			   approved[i].active ? "true" : "false",
+			   approved[i].rx, approved[i].tx);
+	}
+	websWrite(stream, "]}");
 }
 #endif
 
@@ -4126,6 +4461,7 @@ struct mime_handler mime_handlers[] = {
 #if defined(SUPPORT_RIDOY_PORTAL)
 	{ "captive_portal.html", "text/html", no_cache_IE, NULL, do_file, 0 },
 	{ "captive_authorize.cgi*", "text/html", no_cache_IE, do_html_apply_post, do_ridoy_captive_authorize, 0 },
+	{ "ridoy_portal_admin.cgi*", "application/json", no_cache_IE, do_ridoy_portal_admin_post, do_ridoy_portal_admin, 1 },
 #endif
 	/* cached javascript files w/o translations */
 	{ "jquery.js", "text/javascript", NULL, NULL, do_file, 0 }, // 2012.06 Eagle23

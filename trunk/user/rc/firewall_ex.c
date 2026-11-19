@@ -775,6 +775,29 @@ get_sshd_bfp_time(int bfp_mode)
 	return i_bfp_time;
 }
 
+#if defined(SUPPORT_RIDOY_PORTAL)
+static void
+ridoy_portal_write_accounting_rules(FILE *fp)
+{
+	FILE *clients;
+	char line[192], name[49], mac[18], ip[16];
+
+	clients = fopen("/tmp/ridoy_portal_clients.log", "r");
+	if (!clients)
+		return;
+
+	while (fgets(line, sizeof(line), clients)) {
+		name[0] = mac[0] = ip[0] = 0;
+		if (sscanf(line, "%48[^\t]\t%17[^\t]\t%15[^\t]", name, mac, ip) == 3 &&
+		    is_valid_ipv4(ip)) {
+			fprintf(fp, "-A RIDoyNetAcct -s %s -j RETURN\n", ip);
+			fprintf(fp, "-A RIDoyNetAcct -d %s -j RETURN\n", ip);
+		}
+	}
+	fclose(clients);
+}
+#endif
+
 static int
 ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
                  char *logaccept, char *logdrop, int tcp_mss_need)
@@ -849,6 +872,10 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	fprintf(fp, "*%s\n", "filter");
 	fprintf(fp, ":%s %s [0:0]\n", "INPUT", (is_fw_enabled) ? "DROP" : "ACCEPT");
 	fprintf(fp, ":%s %s [0:0]\n", "FORWARD", (is_fw_enabled) ? "DROP" :  "ACCEPT");
+#if defined(SUPPORT_RIDOY_PORTAL)
+	if (is_ridoy_portal)
+		fprintf(fp, ":%s - [0:0]\n", "RIDoyNetAcct");
+#endif
 	fprintf(fp, ":%s %s [0:0]\n", "OUTPUT", "ACCEPT");
 	fprintf(fp, ":%s - [0:0]\n", MINIUPNPD_CHAIN_IP4_FORWARD);
 	fprintf(fp, ":%s - [0:0]\n", IPT_CHAIN_NAME_VPN_LIST);
@@ -1075,9 +1102,12 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	dtype = "FORWARD";
 
 #if defined(SUPPORT_RIDOY_PORTAL)
-	/* Unapproved IPv4 clients may reach the router portal but not any routed network. */
-	if (is_ridoy_portal)
+	/* Unapproved IPv4 clients are dropped before accounting or other forwarding rules. */
+	if (is_ridoy_portal) {
 		fprintf(fp, "-A %s -s %s ! -o %s -m set ! --match-set ridoy_portal_allow src -j DROP\n", dtype, lan_net, lan_if);
+		fprintf(fp, "-A %s -j RIDoyNetAcct\n", dtype);
+		ridoy_portal_write_accounting_rules(fp);
+	}
 #endif
 
 	if (i_mac_filter > 0)
