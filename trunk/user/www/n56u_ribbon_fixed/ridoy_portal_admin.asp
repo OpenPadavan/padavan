@@ -171,7 +171,6 @@ function portalRenderPending(items) {
     for (var i=0; i<items.length; i++) {
         var item = items[i], row = portalNode("tr");
         portalCell(row, item.name);
-        portalCell(row, item.mac);
         portalCell(row, item.ip);
         portalCell(row, item.stamp ? new Date(item.stamp * 1000).toLocaleString() : "—");
         var actions = portalNode("td");
@@ -189,7 +188,7 @@ function portalRenderApproved(items) {
     if (!items.length) {
         var row = portalNode("tr");
         var td = portalCell(row, "No approved devices yet.");
-        td.colSpan = 7;
+        td.colSpan = 6;
         td.className = "portal-muted";
         body.appendChild(row);
         portalPrevious = {};
@@ -211,7 +210,7 @@ function portalRenderApproved(items) {
         badge.className = item.active ? "portal-status" : "portal-status off";
         status.appendChild(badge);
         portalCell(row, "↓ " + downRate + " / ↑ " + upRate);
-        portalCell(row, "↓ " + portalBytes(item.rx) + " / ↑ " + portalBytes(item.tx));
+        portalCell(row, portalBytes(Number(item.rx || 0) + Number(item.tx || 0)) + " used / " + portalBytes(item.remaining) + " left");
         var actions = portalNode("td");
         row.appendChild(actions);
         portalButton(row, "Revoke", "portal-revoke", "revoke", item.ip);
@@ -262,18 +261,10 @@ function initial() {
               <p id="voucherToken" style="display:none;font-size:22px;letter-spacing:2px;font-weight:bold;color:#37d6e8;overflow-wrap:anywhere"></p>
             </div>
             <div class="portal-card">
-              <h3>Pending Requests (<span id="pendingCount">0</span>)</h3>
-              <p class="portal-help">Devices listed here have no Internet access until you approve them.</p>
-              <table class="portal-table">
-                <thead><tr><th>Name</th><th>MAC Address</th><th>IP Address</th><th>Requested</th><th>Action</th></tr></thead>
-                <tbody id="pendingBody"><tr><td colspan="5">Loading…</td></tr></tbody>
-              </table>
-            </div>
-            <div class="portal-card">
               <h3>Approved Devices (<span id="approvedCount">0</span>)</h3>
               <p class="portal-help">Live rates are calculated from router firewall byte counters. Data access ends when the prepaid quota is exhausted.</p>
               <table class="portal-table">
-                <thead><tr><th>Name</th><th>MAC Address</th><th>IP Address</th><th>Status</th><th>Current Speed</th><th>Total Usage</th><th>Action</th></tr></thead>
+                <thead><tr><th>Name</th><th>IP Address</th><th>Status</th><th>Current Speed</th><th>Usage / Remaining</th><th>Action</th></tr></thead>
                 <tbody id="approvedBody"><tr><td colspan="7">Loading…</td></tr></tbody>
               </table>
             </div>
