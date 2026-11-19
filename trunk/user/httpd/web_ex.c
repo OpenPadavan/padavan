@@ -4331,6 +4331,8 @@ ridoy_voucher_create(int gb, int days, char *out, size_t outlen, int *price_out)
 	snprintf(items[count].token, sizeof(items[count].token), "%s", out);
 	items[count].gb = gb;
 	items[count].price = price;
+	snprintf(items[count].name, sizeof(items[count].name), "-");
+	snprintf(items[count].ip, sizeof(items[count].ip), "-");
 	items[count].expires = (unsigned long)time(NULL) + (unsigned long)days * 86400UL;
 	items[count].quota_bytes = (unsigned long long)gb * RIDOY_GB_BYTES;
 	j = ridoy_voucher_write(items, count + 1);
@@ -4356,7 +4358,7 @@ ridoy_voucher_redeem(const char *token, const char *name, const char *ip,
 	count = ridoy_voucher_read(items, RIDOY_VOUCHER_MAX);
 	for (i = 0; i < count; i++)
 		if (strcasecmp(items[i].token, token) == 0) { found = i; break; }
-	if (found < 0 || items[found].redeemed || items[found].expires < now) {
+	if (found < 0 || items[found].redeemed || items[found].expires <= now) {
 		flock(fileno(lock), LOCK_UN); fclose(lock); return 0;
 	}
 	items[found].redeemed = 1;
