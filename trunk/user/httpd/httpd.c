@@ -975,6 +975,11 @@ handle_request(FILE *conn_fp, const conn_item_t *item)
 		const char *router_ip = nvram_safe_get("lan_ipaddr");
 		int is_router_host = 0;
 		int is_portal_endpoint = (strcmp(file, "captive_portal.html") == 0 || strcmp(file, "captive_authorize.cgi") == 0);
+		int is_captive_probe = (strcasecmp(file, "generate_204") == 0 ||
+					strcasecmp(file, "gen_204") == 0 ||
+					strcasecmp(file, "hotspot-detect.html") == 0 ||
+					strcasecmp(file, "connecttest.txt") == 0 ||
+					strcasecmp(file, "ncsi.txt") == 0);
 
 		host_port = strchr(request_host, ':');
 		if (host_port)
@@ -989,12 +994,21 @@ handle_request(FILE *conn_fp, const conn_item_t *item)
 				is_portal_endpoint = 1;
 		}
 
+		/* Probe URLs must never fall through to the router's normal login page. */
+		if (is_captive_probe)
+			is_router_host = 0;
+
 		if (!is_router_host && !is_portal_endpoint) {
-			char redirect_header[256];
+			char redirect_header[384];
 			const char *portal_ip = is_valid_ipv4(router_ip) ? router_ip : "192.168.0.1";
-			/* Return a real HTTP redirect so Android's captive-portal probe detects sign-in. */
-			snprintf(redirect_header, sizeof(redirect_header),
-				 "Location: http://%s/captive_portal.html", portal_ip);
+			int portal_port = nvram_safe_get_int("http_lanport", 80, 80, 65535);
+			/* Redirect OS connectivity probes and ordinary HTTP requests to the sign-in page. */
+			if (portal_port == 80)
+				snprintf(redirect_header, sizeof(redirect_header),
+					 "Location: http://%s/captive_portal.html\r\nCache-Control: no-store, no-cache, must-revalidate\r\nPragma: no-cache", portal_ip);
+			else
+				snprintf(redirect_header, sizeof(redirect_header),
+					 "Location: http://%s:%d/captive_portal.html\r\nCache-Control: no-store, no-cache, must-revalidate\r\nPragma: no-cache", portal_ip, portal_port);
 			send_headers(302, "Found", redirect_header, "text/html", NULL, conn_fp);
 			fprintf(conn_fp, "<!doctype html><html><body><a href=\"http://%s/captive_portal.html\">Continue to Ridoy.Net</a></body></html>", portal_ip);
 			fflush(conn_fp);
