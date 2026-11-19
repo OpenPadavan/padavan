@@ -263,7 +263,7 @@ function initial() {
               <p class="portal-help">Live rates are calculated from router firewall byte counters. Data access ends when the prepaid quota is exhausted.</p>
               <table class="portal-table">
                 <thead><tr><th>Name</th><th>IP Address</th><th>Status</th><th>Current Speed</th><th>Usage / Remaining</th><th>Action</th></tr></thead>
-                <tbody id="approvedBody"><tr><td colspan="7">Loading…</td></tr></tbody>
+                <tbody id="approvedBody"><tr><td colspan="6">Loading…</td></tr></tbody>
               </table>
             </div>
             <p id="portalRefreshTime" class="portal-help">Waiting for router data…</p>
