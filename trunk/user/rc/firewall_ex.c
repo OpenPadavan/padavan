@@ -809,8 +809,12 @@ ridoy_portal_write_accounting_rules(FILE *fp)
 			}
 			if (!exhausted) {
 				char command[128];
-				snprintf(command, sizeof(command),
-					 "/sbin/ipset add ridoy_portal_allow %s -exist >/dev/null 2>&1", ip);
+				if (quota == 0)
+					snprintf(command, sizeof(command),
+						 "/sbin/ipset add ridoy_portal_allow %s timeout 0 -exist >/dev/null 2>&1", ip);
+				else
+					snprintf(command, sizeof(command),
+						 "/sbin/ipset add ridoy_portal_allow %s -exist >/dev/null 2>&1", ip);
 				system(command);
 			}
 		}
