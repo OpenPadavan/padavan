@@ -782,7 +782,7 @@ ridoy_portal_write_accounting_rules(FILE *fp)
 	FILE *clients;
 	char line[192], name[49], mac[18], ip[16];
 
-	clients = fopen("/tmp/ridoy_portal_clients.log", "r");
+	clients = fopen("/etc/storage/ridoy_portal_clients.log", "r");
 	if (!clients)
 		return;
 
