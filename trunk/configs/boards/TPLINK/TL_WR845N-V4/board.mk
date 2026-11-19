@@ -13,3 +13,5 @@ TPLINK_HWREV=0x1
 TPLINK_HWREVADD=0x4
 TPLINK_FLASHLAYOUT=4Mmtk
 TPLINK_HVERSION=3
+# Enable Ridoy.Net captive portal backend in httpd and firewall.
+CFLAGS += -DSUPPORT_RIDOY_PORTAL
