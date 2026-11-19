@@ -47,13 +47,21 @@ while IFS="$(printf '\t')" read -r name mac ip stamp quota extra; do
   printf "%s %s %s %s %s %s\n" "$mac" "$ip" "$rx" "$tx" "$sum_rx" "$sum_tx" >> "$NEXT"
   printf "%s\t%s\t%s\t%s\t%s\n" "$name" "$mac" "$ip" "$stamp" "$quota" >> "$CLIENTS_TMP"
   exhausted=0
-  if awk -v used="$total" -v quota="$quota" 'BEGIN { exit !(used >= quota) }'; then exhausted=1; fi
+  if [ "$quota" = "0" ]; then
+    exhausted=0
+  elif awk -v used="$total" -v quota="$quota" 'BEGIN { exit !(used >= quota) }'; then
+    exhausted=1
+  fi
   if [ "$changed" = "1" ]; then
     /sbin/ipset del ridoy_portal_allow "$old_ip" >/dev/null 2>&1
     /sbin/iptables -D RIDoyNetAcct -s "$old_ip" -j RETURN >/dev/null 2>&1
     /sbin/iptables -D RIDoyNetAcct -d "$old_ip" -j RETURN >/dev/null 2>&1
     if [ "$exhausted" = "0" ]; then
-      /sbin/ipset add ridoy_portal_allow "$ip" -exist >/dev/null 2>&1
+      if [ "$quota" = "0" ]; then
+        /sbin/ipset add ridoy_portal_allow "$ip" timeout 0 -exist >/dev/null 2>&1
+      else
+        /sbin/ipset add ridoy_portal_allow "$ip" -exist >/dev/null 2>&1
+      fi
       /sbin/iptables -D RIDoyNetAcct -s "$ip" -j RETURN >/dev/null 2>&1
       /sbin/iptables -A RIDoyNetAcct -s "$ip" -j RETURN >/dev/null 2>&1
       /sbin/iptables -D RIDoyNetAcct -d "$ip" -j RETURN >/dev/null 2>&1
