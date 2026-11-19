@@ -4376,6 +4376,10 @@ ridoy_voucher_redeem(const char *token, const char *name, const char *ip,
 		char command[128];
 		snprintf(command, sizeof(command), "/sbin/ipset add ridoy_portal_allow %s -exist", ip);
 		ok = (system(command) == 0);
+		if (ok) {
+			snprintf(command, sizeof(command), "/sbin/iptables -D RIDoyNetAcct -s %s -j RETURN >/dev/null 2>&1; /sbin/iptables -A RIDoyNetAcct -s %s -j RETURN >/dev/null 2>&1; /sbin/iptables -D RIDoyNetAcct -d %s -j RETURN >/dev/null 2>&1; /sbin/iptables -A RIDoyNetAcct -d %s -j RETURN >/dev/null 2>&1", ip, ip, ip, ip);
+			system(command);
+		}
 	}
 	if (!ok) {
 		/* Fail closed: token remains consumed if persistence partially succeeded. */
@@ -4455,25 +4459,19 @@ ridoy_ipset_is_allowed(const char *ip)
 static void
 do_ridoy_captive_authorize(const char *url, FILE *stream)
 {
-	char safe_name[49];
+	char safe_name[49], token[33];
 	const char *name = get_cgi("ridoy_name");
-	const char *mac = get_cgi("ridoy_mac");
-	ridoy_portal_record_t request;
-	int i, j = 0;
+	const char *submitted_token = get_cgi("ridoy_token");
+	unsigned long long quota = 0;
+	int i, j = 0, gb = 0, price = 0;
 
 	if (!nvram_match("ridoy_portal_runtime", "1") ||
 	    !get_cgi("ridoy_accept") || strcmp(get_cgi("ridoy_accept"), "1") != 0 ||
 	    !is_valid_ipv4(captive_client_ip) || !name || !*name ||
-	    !mac || !ridoy_valid_mac(mac)) {
-		websWrite(stream, "<!doctype html><html><body><h2>Details required</h2><p>Enter your name and a valid MAC address, then try again.</p><a href=\"/captive_portal.html\">Back</a></body></html>");
+	    !submitted_token || strlen(submitted_token) != 16) {
+		websWrite(stream, "<!doctype html><html><body><h2>Details required</h2><p>Enter your name and a valid 16-character secret token.</p><a href=\"/captive_portal.html\">Back</a></body></html>");
 		return;
 	}
-
-	if (!ridoy_client_mac_matches(captive_client_ip, mac)) {
-		websWrite(stream, "<!doctype html><html><body><h2>Device MAC does not match</h2><p>Your request was not accepted. Check the Wi-Fi MAC address for this network and try again.</p><a href=\"/captive_portal.html\">Back</a></body></html>");
-		return;
-	}
-
 	for (i = 0; name[i] && j < 48; i++) {
 		unsigned char ch = (unsigned char)name[i];
 		if (isalnum(ch) || ch == ' ' || ch == '_' || ch == '-')
@@ -4484,21 +4482,17 @@ do_ridoy_captive_authorize(const char *url, FILE *stream)
 		websWrite(stream, "<!doctype html><html><body><h2>Invalid name</h2><p>Please enter a name using letters or numbers.</p><a href=\"/captive_portal.html\">Back</a></body></html>");
 		return;
 	}
-
-	memset(&request, 0, sizeof(request));
-	snprintf(request.name, sizeof(request.name), "%s", safe_name);
-	snprintf(request.mac, sizeof(request.mac), "%s", mac);
-	snprintf(request.ip, sizeof(request.ip), "%s", captive_client_ip);
-	request.stamp = (unsigned long)time(NULL);
-
-	if (!ridoy_upsert_record(RIDOY_PORTAL_PENDING_FILE, &request)) {
-		websWrite(stream, "<!doctype html><html><body><h2>Request queue is full</h2><p>Please contact the network owner.</p></body></html>");
+	for (i = 0; i < 16; i++)
+		token[i] = (char)toupper((unsigned char)submitted_token[i]);
+	token[16] = 0;
+	if (!ridoy_voucher_redeem(token, safe_name, captive_client_ip, &quota, &gb, &price)) {
+		websWrite(stream, "<!doctype html><html><head><meta charset=\"utf-8\"><title>Ridoy.Net</title></head><body><h2>Token invalid or expired</h2><p>This token may already be used, expired, or incorrect. Contact the network owner.</p><a href=\"/captive_portal.html\">Try again</a></body></html>");
 		return;
 	}
-
-	websWrite(stream, "<!doctype html><html><head><meta charset=\"utf-8\"><title>Ridoy.Net</title><style>body{background:#071426;color:#f4f8ff;font:16px system-ui;display:grid;place-items:center;min-height:90vh;text-align:center}.box{padding:32px;border:1px solid #23415f;border-radius:20px;background:#10243c}b{color:#37d6e8}</style></head><body><div class=\"box\"><h2>Request submitted</h2><p>Welcome, <b>");
+	websWrite(stream, "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Ridoy.Net</title><style>body{background:#071426;color:#f4f8ff;font:16px system-ui;display:grid;place-items:center;min-height:90vh;text-align:center}.box{padding:32px;border:1px solid #23415f;border-radius:20px;background:#10243c}b{color:#37d6e8}</style></head><body><div class=\"box\"><h2>Internet activated</h2><p>Welcome, <b>");
 	websWrite(stream, safe_name);
-	websWrite(stream, "</b></p><p>Your request is waiting for the network owner to approve it.</p><p>Internet access will start only after approval.</p></div></body></html>");
+	websWrite(stream, "</b></p><p>Your package: <b>");
+	websWrite(stream, "%d GB</b> · ৳%d</p><p>Your token has been used and cannot be redeemed again.</p><p>Internet access will stop when your data is exhausted.</p></div></body></html>", gb, price);
 }
 
 static void
