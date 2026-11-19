@@ -86,6 +86,36 @@ function portalAction(action, ip) {
     };
     xhr.send("action=" + encodeURIComponent(action) + "&ip=" + encodeURIComponent(ip));
 }
+function voucherValidityOptions() {
+    var gb = Number(document.getElementById("voucherGb").value);
+    var select = document.getElementById("voucherValidity");
+    var allowed = (gb === 25 || gb === 50) ? [1,7,15,30] : [1,7,15];
+    select.innerHTML = "";
+    for (var i=0; i<allowed.length; i++) {
+        var opt = portalNode("option", allowed[i] + " day" + (allowed[i] > 1 ? "s" : ""));
+        opt.value = allowed[i];
+        select.appendChild(opt);
+    }
+}
+function portalCreateToken() {
+    var xhr = new XMLHttpRequest();
+    var gb = document.getElementById("voucherGb").value;
+    var validity = document.getElementById("voucherValidity").value;
+    xhr.open("POST", "/ridoy_portal_admin.cgi", true);
+    xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
+        try {
+            var result = JSON.parse(xhr.responseText);
+            if (!result.ok) { portalMessage(result.message || "Could not create voucher.", true); return; }
+            var token = document.getElementById("voucherToken");
+            token.textContent = result.token || "";
+            token.style.display = "block";
+            portalMessage(result.message + " Package: " + result.gb + " GB · ৳" + result.price + " · redeem within " + result.validity_days + " days.", false);
+        } catch(e) { portalMessage("Could not read the voucher response.", true); }
+    };
+    xhr.send("action=create_token&gb=" + encodeURIComponent(gb) + "&validity=" + encodeURIComponent(validity));
+}
 function portalLoad() {
     var xhr = new XMLHttpRequest();
     var status = document.getElementById("portalRefreshTime");
@@ -222,6 +252,16 @@ function initial() {
           <div class="round_bottom portal-wrap">
             <div id="portalMessage" class="portal-message"></div>
             <div class="portal-card">
+              <h3>Create prepaid voucher</h3>
+              <p class="portal-help">Each token works once. It must be redeemed before its validity expires; the data allowance remains until used.</p>
+              <div class="row-fluid">
+                <div class="span4"><label for="voucherGb">Data package</label><select id="voucherGb" class="input-block-level" onchange="voucherValidityOptions()"><option value="1">1 GB · ৳10</option><option value="2">2 GB · ৳15</option><option value="5">5 GB · ৳30</option><option value="10">10 GB · ৳40</option><option value="25">25 GB · ৳70</option><option value="50">50 GB · ৳100</option></select></div>
+                <div class="span4"><label for="voucherValidity">Redeem within</label><select id="voucherValidity" class="input-block-level"><option value="1">1 day</option><option value="7">7 days</option><option value="15">15 days</option></select></div>
+                <div class="span4"><label>&nbsp;</label><button type="button" class="btn btn-success" onclick="portalCreateToken()">Generate token</button></div>
+              </div>
+              <p id="voucherToken" style="display:none;font-size:22px;letter-spacing:2px;font-weight:bold;color:#37d6e8;overflow-wrap:anywhere"></p>
+            </div>
+            <div class="portal-card">
               <h3>Pending Requests (<span id="pendingCount">0</span>)</h3>
               <p class="portal-help">Devices listed here have no Internet access until you approve them.</p>
               <table class="portal-table">
@@ -231,7 +271,7 @@ function initial() {
             </div>
             <div class="portal-card">
               <h3>Approved Devices (<span id="approvedCount">0</span>)</h3>
-              <p class="portal-help">Live rates are calculated from router firewall byte counters. Access expires automatically after 30 days.</p>
+              <p class="portal-help">Live rates are calculated from router firewall byte counters. Data access ends when the prepaid quota is exhausted.</p>
               <table class="portal-table">
                 <thead><tr><th>Name</th><th>MAC Address</th><th>IP Address</th><th>Status</th><th>Current Speed</th><th>Total Usage</th><th>Action</th></tr></thead>
                 <tbody id="approvedBody"><tr><td colspan="7">Loading…</td></tr></tbody>
