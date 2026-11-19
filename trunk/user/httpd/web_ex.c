@@ -4369,7 +4369,7 @@ ridoy_voucher_create(int gb, int days, char *out, size_t outlen, int *price_out)
 }
 
 static int
-ridoy_voucher_redeem(const char *token, const char *name, const char *ip,
+ridoy_voucher_redeem(const char *token, const char *name, const char *ip, const char *mac,
 		     unsigned long long *quota, int *gb, int *price)
 {
 	ridoy_voucher_t items[RIDOY_VOUCHER_MAX];
