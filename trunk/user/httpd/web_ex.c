@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <sys/types.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
 #include <sys/socket.h>
@@ -4015,7 +4016,9 @@ static char no_cache_IE[] =
 
 #if defined(SUPPORT_RIDOY_PORTAL)
 #define RIDOY_PORTAL_PENDING_FILE "/tmp/ridoy_portal_pending.log"
-#define RIDOY_PORTAL_CLIENTS_FILE "/tmp/ridoy_portal_clients.log"
+#define RIDOY_PORTAL_CLIENTS_FILE "/etc/storage/ridoy_portal_clients.log"
+#define RIDOY_PORTAL_TOKEN_FILE "/etc/storage/ridoy_portal_tokens.db"
+#define RIDOY_PORTAL_TOKEN_LOCK "/etc/storage/ridoy_portal_tokens.lock"
 #define RIDOY_PORTAL_MAX_CLIENTS 64
 
 typedef struct ridoy_portal_record {
@@ -4026,6 +4029,7 @@ typedef struct ridoy_portal_record {
 	unsigned long long rx;
 	unsigned long long tx;
 	int active;
+	unsigned long long quota_bytes;
 } ridoy_portal_record_t;
 
 static int ridoy_portal_admin_post = 0;
@@ -4093,10 +4097,10 @@ ridoy_parse_record(const char *line, ridoy_portal_record_t *record)
 		return 0;
 
 	memset(record, 0, sizeof(*record));
-	n = sscanf(line, "%48[^\t]\t%17[^\t]\t%15[^\t]\t%lu",
-		   record->name, record->mac, record->ip, &stamp);
+	n = sscanf(line, "%48[^\t]\t%17[^\t]\t%15[^\t]\t%lu\t%llu",
+		   record->name, record->mac, record->ip, &stamp, &record->quota_bytes);
 	if (n < 3 || !record->name[0] ||
-	    !ridoy_valid_mac(record->mac) || !is_valid_ipv4(record->ip))
+	    (strcmp(record->mac, "-") != 0 && !ridoy_valid_mac(record->mac)) || !is_valid_ipv4(record->ip))
 		return 0;
 
 	record->stamp = (n >= 4) ? stamp : 0;
@@ -4136,9 +4140,9 @@ ridoy_save_records(const char *path, ridoy_portal_record_t *records, int count)
 		return 0;
 
 	for (i = 0; i < count; i++) {
-		if (fprintf(fp, "%s\t%s\t%s\t%lu\n",
+		if (fprintf(fp, "%s\t%s\t%s\t%lu\t%llu\n",
 			    records[i].name, records[i].mac, records[i].ip,
-			    records[i].stamp) < 0) {
+			    records[i].stamp, records[i].quota_bytes) < 0) {
 			fclose(fp);
 			unlink(tmp);
 			return 0;
@@ -4160,7 +4164,7 @@ ridoy_upsert_record(const char *path, const ridoy_portal_record_t *record)
 	count = ridoy_load_records(path, records, RIDOY_PORTAL_MAX_CLIENTS);
 	for (i = 0; i < count; i++) {
 		if (strcmp(records[i].ip, record->ip) == 0 ||
-		    strcasecmp(records[i].mac, record->mac) == 0)
+		    (strcmp(record->mac, "-") != 0 && strcasecmp(records[i].mac, record->mac) == 0))
 			continue;
 		records[keep++] = records[i];
 	}
