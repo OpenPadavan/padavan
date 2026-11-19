@@ -4054,6 +4054,33 @@ ridoy_valid_mac(const char *mac)
 /* The submitted MAC must match the router's ARP entry for the
  * actual source IP. Never trust a MAC or IP supplied by the form alone. */
 static int
+ridoy_get_client_mac(const char *client_ip, char *mac_out, size_t mac_len)
+{
+	FILE *fp;
+	char line[256], arp_ip[64], arp_mac[32];
+	if (!client_ip || !mac_out || mac_len < 18)
+		return 0;
+	fp = fopen("/proc/net/arp", "r");
+	if (!fp)
+		return 0;
+	if (!fgets(line, sizeof(line), fp)) {
+		fclose(fp);
+		return 0;
+	}
+	while (fgets(line, sizeof(line), fp)) {
+		arp_ip[0] = arp_mac[0] = 0;
+		if (sscanf(line, "%63s %*s %*s %31s", arp_ip, arp_mac) == 2 &&
+		    strcmp(arp_ip, client_ip) == 0 && ridoy_valid_mac(arp_mac)) {
+			snprintf(mac_out, mac_len, "%s", arp_mac);
+			fclose(fp);
+			return 1;
+		}
+	}
+	fclose(fp);
+	return 0;
+}
+
+static int
 ridoy_client_mac_matches(const char *client_ip, const char *submitted_mac)
 {
 	FILE *fp;
@@ -4350,7 +4377,7 @@ ridoy_voucher_redeem(const char *token, const char *name, const char *ip,
 	FILE *lock;
 	int count, i, found = -1, ok;
 	unsigned long now = (unsigned long)time(NULL);
-	if (!token || strlen(token) != 16 || !name || !is_valid_ipv4(ip))
+	if (!token || strlen(token) != 16 || !name || !is_valid_ipv4(ip) || !ridoy_valid_mac(mac))
 		return 0;
 	lock = ridoy_voucher_lock();
 	if (!lock)
@@ -4367,7 +4394,7 @@ ridoy_voucher_redeem(const char *token, const char *name, const char *ip,
 	items[found].started = now;
 	memset(&client, 0, sizeof(client));
 	snprintf(client.name, sizeof(client.name), "%s", name);
-	snprintf(client.mac, sizeof(client.mac), "-");
+	snprintf(client.mac, sizeof(client.mac), "%s", mac);
 	snprintf(client.ip, sizeof(client.ip), "%s", ip);
 	client.stamp = now;
 	client.quota_bytes = items[found].quota_bytes;
@@ -4474,7 +4501,7 @@ ridoy_ipset_is_allowed(const char *ip)
 static void
 do_ridoy_captive_authorize(const char *url, FILE *stream)
 {
-	char safe_name[49], token[33];
+	char safe_name[49], token[33], client_mac[18];
 	const char *name = get_cgi("ridoy_name");
 	const char *submitted_token = get_cgi("ridoy_token");
 	unsigned long long quota = 0;
@@ -4500,7 +4527,11 @@ do_ridoy_captive_authorize(const char *url, FILE *stream)
 	for (i = 0; i < 16; i++)
 		token[i] = (char)toupper((unsigned char)submitted_token[i]);
 	token[16] = 0;
-	if (!ridoy_voucher_redeem(token, safe_name, captive_client_ip, &quota, &gb, &price)) {
+	if (!ridoy_get_client_mac(captive_client_ip, client_mac, sizeof(client_mac))) {
+		websWrite(stream, "<!doctype html><html><body><h2>Device not ready</h2><p>Please reconnect to Wi-Fi and try again.</p><a href=\"/captive_portal.html\">Back</a></body></html>");
+		return;
+	}
+	if (!ridoy_voucher_redeem(token, safe_name, captive_client_ip, client_mac, &quota, &gb, &price)) {
 		websWrite(stream, "<!doctype html><html><head><meta charset=\"utf-8\"><title>Ridoy.Net</title></head><body><h2>Token invalid or expired</h2><p>This token may already be used, expired, or incorrect. Contact the network owner.</p><a href=\"/captive_portal.html\">Try again</a></body></html>");
 		return;
 	}
