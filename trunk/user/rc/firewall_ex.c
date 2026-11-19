@@ -787,12 +787,32 @@ ridoy_portal_write_accounting_rules(FILE *fp)
 		return;
 
 	while (fgets(line, sizeof(line), clients)) {
+		unsigned long stamp = 0;
+		unsigned long long quota = 0, used = 0, a, b, rx_total, tx_total;
+		int exhausted = 0;
 		name[0] = mac[0] = ip[0] = 0;
-		if (sscanf(line, "%48[^\t]\t%17[^\t]\t%15[^\t]", name, mac, ip) == 3 &&
-		    is_valid_ipv4(ip)) {
+		if (sscanf(line, "%48[^\t]\t%17[^\t]\t%15[^\t]\t%lu\t%llu",
+			   name, mac, ip, &stamp, &quota) >= 3 && is_valid_ipv4(ip)) {
 			fprintf(fp, "-A RIDoyNetAcct -s %s -j RETURN\n", ip);
 			fprintf(fp, "-A RIDoyNetAcct -d %s -j RETURN\n", ip);
-			{ char command[128]; snprintf(command, sizeof(command), "/sbin/ipset add ridoy_portal_allow %s -exist >/dev/null 2>&1", ip); system(command); }
+			if (quota > 0) {
+				FILE *usage = fopen("/etc/storage/ridoy_portal_usage.state", "r");
+				if (usage) {
+					char state_ip[16];
+					while (fscanf(usage, "%15s %llu %llu %llu %llu",
+						      state_ip, &a, &b, &rx_total, &tx_total) == 5)
+						if (strcmp(state_ip, ip) == 0)
+							used = rx_total + tx_total;
+					fclose(usage);
+				}
+				exhausted = (used >= quota);
+			}
+			if (!exhausted) {
+				char command[128];
+				snprintf(command, sizeof(command),
+					 "/sbin/ipset add ridoy_portal_allow %s -exist >/dev/null 2>&1", ip);
+				system(command);
+			}
 		}
 	}
 	fclose(clients);
