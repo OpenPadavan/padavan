@@ -453,8 +453,18 @@ if [ "$CONFIG_FIRMWARE_INCLUDE_XFRM" != "y" ]; then
 fi
 #fi
 ############################ IPSET ####################################
-if [ "$CONFIG_FIRMWARE_INCLUDE_IPSET" != "y" ]; then
+if [ "$CONFIG_FIRMWARE_INCLUDE_IPSET" = "y" ]; then
+	# Enable all kernel components needed by ipset and the captive portal firewall.
+	func_enable_kernel_param "CONFIG_NETFILTER_ADVANCED"
+	func_enable_kernel_param_as_m "CONFIG_NETFILTER_NETLINK"
+	func_enable_kernel_param_as_m "CONFIG_IP_SET"
+	func_enable_kernel_param_as_m "CONFIG_IP_SET_HASH_IP"
+	func_enable_kernel_param_as_m "CONFIG_NETFILTER_XT_SET"
+else
 	func_disable_kernel_param "CONFIG_NETFILTER_NETLINK"
+	func_disable_kernel_param "CONFIG_IP_SET"
+	func_disable_kernel_param "CONFIG_IP_SET_HASH_IP"
+	func_disable_kernel_param "CONFIG_NETFILTER_XT_SET"
 fi
 ############################# QOS #####################################
 if [ "$CONFIG_FIRMWARE_INCLUDE_QOS" != "y" ]; then
