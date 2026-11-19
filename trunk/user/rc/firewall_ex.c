@@ -825,6 +825,21 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 
 	ret = 0;
 #if defined(SUPPORT_RIDOY_PORTAL)
+	/* Initialize the portal before generating IPv4 filter rules. The NAT
+	 * rules are generated later, so initializing it there is too late: the
+	 * FORWARD chain would otherwise be built without the portal rules. */
+#if defined(SUPPORT_HTTPS)
+	i_http_proto = nvram_get_int("http_proto");
+#else
+	i_http_proto = 0;
+#endif
+	if (i_http_proto == 0 || i_http_proto == 2) {
+		module_smart_load("ip_set_hash_ip", NULL);
+		module_smart_load("xt_set", NULL);
+		if (system("/sbin/ipset -exist create ridoy_portal_allow hash:ip family inet timeout 86400") == 0)
+			is_ridoy_portal = 1;
+	}
+	nvram_set_int_temp("ridoy_portal_runtime", is_ridoy_portal);
 	ip2class(lan_ip, nvram_safe_get("lan_netmask"), lan_net, sizeof(lan_net));
 #endif
 	i_bfplimit_ref = 0;
