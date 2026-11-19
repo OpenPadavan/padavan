@@ -4349,7 +4349,7 @@ ridoy_portal_admin_action(const char *action, const char *ip, FILE *stream)
 			return;
 		}
 		snprintf(command, sizeof(command),
-			 "/sbin/ipset add ridoy_portal_allow %s timeout 86400 -exist", record.ip);
+			 "/sbin/ipset add ridoy_portal_allow %s timeout 2592000 -exist", record.ip);
 		if (system(command) != 0) {
 			ridoy_portal_admin_result(stream, 0, "Could not add this device to the allow list.");
 			return;
