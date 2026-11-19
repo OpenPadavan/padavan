@@ -6,6 +6,7 @@ on:
     paths:
       - 'trunk/configs/templates/tplink/tl_wr845n-v4.config'
       - 'trunk/configs/boards/TPLINK/TL_WR845N-V4/kernel-3.4.x.config'
+      - 'trunk/build_firmware.sh'
       - 'trunk/user/www/n56u_ribbon_fixed/**'
       - 'trunk/user/httpd/**'
       - 'trunk/user/rc/**'
