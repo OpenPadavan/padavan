@@ -783,6 +783,9 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	char timematch[160], *ftype, *dtype, *vpnc_if;
 	const char *ipt_file = "/tmp/ipt_filter.rules";
 	int ret, wport, lport;
+#if defined(SUPPORT_RIDOY_PORTAL)
+	char lan_net[24] = {0};
+#endif
 	int is_nat_enabled, is_dos_enabled, is_fw_enabled, is_logaccept, is_logdrop;
 	int is_url_enabled, is_lwf_enabled;
 	int i_vpns_enable, i_vpns_type, i_vpns_actl, i_http_proto, i_bfplimit_ref;
@@ -798,6 +801,9 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 #endif
 
 	ret = 0;
+#if defined(SUPPORT_RIDOY_PORTAL)
+	ip2class(lan_ip, nvram_safe_get("lan_netmask"), lan_net, sizeof(lan_net));
+#endif
 	i_bfplimit_ref = 0;
 
 	is_logaccept = (strcmp(logaccept, IPT_CHAIN_NAME_LOG_ACCEPT) == 0) ? 1 : 0;
