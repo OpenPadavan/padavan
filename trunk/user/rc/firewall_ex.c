@@ -798,10 +798,10 @@ ridoy_portal_write_accounting_rules(FILE *fp)
 			if (quota > 0) {
 				FILE *usage = fopen("/etc/storage/ridoy_portal_usage.state", "r");
 				if (usage) {
-					char state_ip[16];
-					while (fscanf(usage, "%15s %llu %llu %llu %llu",
-						      state_ip, &a, &b, &rx_total, &tx_total) == 5)
-						if (strcmp(state_ip, ip) == 0)
+					char state_mac[18], state_ip[16];
+					while (fscanf(usage, "%17s %15s %llu %llu %llu %llu",
+						      state_mac, state_ip, &a, &b, &rx_total, &tx_total) == 6)
+						if (strcasecmp(state_mac, mac) == 0)
 							used = rx_total + tx_total;
 					fclose(usage);
 				}
