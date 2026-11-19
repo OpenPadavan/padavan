@@ -4204,6 +4204,190 @@ ridoy_find_record(const char *path, const char *ip, ridoy_portal_record_t *recor
 	return 0;
 }
 
+typedef struct ridoy_voucher {
+	char token[33];
+	int gb;
+	int price;
+	unsigned long expires;
+	int redeemed;
+	char name[49];
+	char ip[16];
+	unsigned long started;
+	unsigned long long quota_bytes;
+} ridoy_voucher_t;
+
+#define RIDOY_VOUCHER_MAX 256
+#define RIDOY_GB_BYTES 1073741824ULL
+
+static int
+ridoy_voucher_allowed(int gb, int days, int *price)
+{
+	switch (gb) {
+	case 1: *price = 10; return (days == 1 || days == 7 || days == 15);
+	case 2: *price = 15; return (days == 1 || days == 7 || days == 15);
+	case 5: *price = 30; return (days == 1 || days == 7 || days == 15);
+	case 10: *price = 40; return (days == 1 || days == 7 || days == 15);
+	case 25: *price = 70; return (days == 1 || days == 7 || days == 15 || days == 30);
+	case 50: *price = 100; return (days == 1 || days == 7 || days == 15 || days == 30);
+	default: return 0;
+	}
+}
+
+static FILE *
+ridoy_voucher_lock(void)
+{
+	FILE *fp;
+	mkdir("/etc/storage", 0755);
+	fp = fopen(RIDOY_PORTAL_TOKEN_LOCK, "a");
+	if (!fp)
+		return NULL;
+	if (flock(fileno(fp), LOCK_EX) != 0) {
+		fclose(fp);
+		return NULL;
+	}
+	return fp;
+}
+
+static int
+ridoy_voucher_read(ridoy_voucher_t *items, int max_items)
+{
+	FILE *fp;
+	char line[256];
+	int n = 0;
+	fp = fopen(RIDOY_PORTAL_TOKEN_FILE, "r");
+	if (!fp)
+		return 0;
+	while (n < max_items && fgets(line, sizeof(line), fp)) {
+		ridoy_voucher_t v;
+		memset(&v, 0, sizeof(v));
+		if (sscanf(line, "%32[^\t]\t%d\t%d\t%lu\t%d\t%48[^\t]\t%15[^\t]\t%lu\t%llu",
+			   v.token, &v.gb, &v.price, &v.expires, &v.redeemed,
+			   v.name, v.ip, &v.started, &v.quota_bytes) == 9)
+			items[n++] = v;
+	}
+	fclose(fp);
+	return n;
+}
+
+static int
+ridoy_voucher_write(ridoy_voucher_t *items, int count)
+{
+	FILE *fp;
+	char tmp[128];
+	int i;
+	snprintf(tmp, sizeof(tmp), "%s.tmp", RIDOY_PORTAL_TOKEN_FILE);
+	fp = fopen(tmp, "w");
+	if (!fp)
+		return 0;
+	chmod(tmp, 0600);
+	for (i = 0; i < count; i++) {
+		if (fprintf(fp, "%s\t%d\t%d\t%lu\t%d\t%s\t%s\t%lu\t%llu\n",
+			    items[i].token, items[i].gb, items[i].price,
+			    items[i].expires, items[i].redeemed, items[i].name,
+			    items[i].ip, items[i].started, items[i].quota_bytes) < 0) {
+			fclose(fp); unlink(tmp); return 0;
+		}
+	}
+	if (fclose(fp) != 0 || rename(tmp, RIDOY_PORTAL_TOKEN_FILE) != 0) {
+		unlink(tmp); return 0;
+	}
+	return 1;
+}
+
+static int
+ridoy_voucher_create(int gb, int days, char *out, size_t outlen, int *price_out)
+{
+	static const char alphabet[] = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+	unsigned char random_bytes[16];
+	ridoy_voucher_t items[RIDOY_VOUCHER_MAX];
+	FILE *random_fp, *lock;
+	int price, count, i, j, duplicate;
+	if (!ridoy_voucher_allowed(gb, days, &price) || outlen < 17)
+		return 0;
+	random_fp = fopen("/dev/urandom", "rb");
+	if (!random_fp)
+		return 0;
+	if (fread(random_bytes, 1, sizeof(random_bytes), random_fp) != sizeof(random_bytes)) {
+		fclose(random_fp); return 0;
+	}
+	fclose(random_fp);
+	for (i = 0; i < 16; i++)
+		out[i] = alphabet[random_bytes[i] & 31];
+	out[16] = 0;
+	lock = ridoy_voucher_lock();
+	if (!lock)
+		return 0;
+	count = ridoy_voucher_read(items, RIDOY_VOUCHER_MAX);
+	if (count >= RIDOY_VOUCHER_MAX) {
+		flock(fileno(lock), LOCK_UN); fclose(lock); return 0;
+	}
+	duplicate = 0;
+	for (i = 0; i < count; i++)
+		if (strcmp(items[i].token, out) == 0) duplicate = 1;
+	if (duplicate) {
+		flock(fileno(lock), LOCK_UN); fclose(lock); return 0;
+	}
+	memset(&items[count], 0, sizeof(items[count]));
+	snprintf(items[count].token, sizeof(items[count].token), "%s", out);
+	items[count].gb = gb;
+	items[count].price = price;
+	items[count].expires = (unsigned long)time(NULL) + (unsigned long)days * 86400UL;
+	items[count].quota_bytes = (unsigned long long)gb * RIDOY_GB_BYTES;
+	j = ridoy_voucher_write(items, count + 1);
+	flock(fileno(lock), LOCK_UN); fclose(lock);
+	if (j && price_out) *price_out = price;
+	return j;
+}
+
+static int
+ridoy_voucher_redeem(const char *token, const char *name, const char *ip,
+		     unsigned long long *quota, int *gb, int *price)
+{
+	ridoy_voucher_t items[RIDOY_VOUCHER_MAX];
+	ridoy_portal_record_t client;
+	FILE *lock;
+	int count, i, found = -1, ok;
+	unsigned long now = (unsigned long)time(NULL);
+	if (!token || strlen(token) != 16 || !name || !is_valid_ipv4(ip))
+		return 0;
+	lock = ridoy_voucher_lock();
+	if (!lock)
+		return 0;
+	count = ridoy_voucher_read(items, RIDOY_VOUCHER_MAX);
+	for (i = 0; i < count; i++)
+		if (strcasecmp(items[i].token, token) == 0) { found = i; break; }
+	if (found < 0 || items[found].redeemed || items[found].expires < now) {
+		flock(fileno(lock), LOCK_UN); fclose(lock); return 0;
+	}
+	items[found].redeemed = 1;
+	snprintf(items[found].name, sizeof(items[found].name), "%s", name);
+	snprintf(items[found].ip, sizeof(items[found].ip), "%s", ip);
+	items[found].started = now;
+	memset(&client, 0, sizeof(client));
+	snprintf(client.name, sizeof(client.name), "%s", name);
+	snprintf(client.mac, sizeof(client.mac), "-");
+	snprintf(client.ip, sizeof(client.ip), "%s", ip);
+	client.stamp = now;
+	client.quota_bytes = items[found].quota_bytes;
+	ok = ridoy_voucher_write(items, count);
+	if (ok)
+		ok = ridoy_upsert_record(RIDOY_PORTAL_CLIENTS_FILE, &client);
+	if (ok) {
+		char command[128];
+		snprintf(command, sizeof(command), "/sbin/ipset add ridoy_portal_allow %s -exist", ip);
+		ok = (system(command) == 0);
+	}
+	if (!ok) {
+		/* Fail closed: token remains consumed if persistence partially succeeded. */
+		flock(fileno(lock), LOCK_UN); fclose(lock); return 0;
+	}
+	if (quota) *quota = client.quota_bytes;
+	if (gb) *gb = items[found].gb;
+	if (price) *price = items[found].price;
+	flock(fileno(lock), LOCK_UN); fclose(lock);
+	return 1;
+}
+
 static void
 ridoy_json_string(FILE *stream, const char *value)
 {
