@@ -231,7 +231,7 @@ function initial() {
             </div>
             <div class="portal-card">
               <h3>Approved Devices (<span id="approvedCount">0</span>)</h3>
-              <p class="portal-help">Live rates are calculated from router firewall byte counters. Access expires after 24 hours.</p>
+              <p class="portal-help">Live rates are calculated from router firewall byte counters. Access expires automatically after 30 days.</p>
               <table class="portal-table">
                 <thead><tr><th>Name</th><th>MAC Address</th><th>IP Address</th><th>Status</th><th>Current Speed</th><th>Total Usage</th><th>Action</th></tr></thead>
                 <tbody id="approvedBody"><tr><td colspan="7">Loading…</td></tr></tbody>
