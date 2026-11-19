@@ -792,6 +792,7 @@ ridoy_portal_write_accounting_rules(FILE *fp)
 		    is_valid_ipv4(ip)) {
 			fprintf(fp, "-A RIDoyNetAcct -s %s -j RETURN\n", ip);
 			fprintf(fp, "-A RIDoyNetAcct -d %s -j RETURN\n", ip);
+			{ char command[128]; snprintf(command, sizeof(command), "/sbin/ipset add ridoy_portal_allow %s -exist >/dev/null 2>&1", ip); system(command); }
 		}
 	}
 	fclose(clients);
