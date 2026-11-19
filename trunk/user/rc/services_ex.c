@@ -446,7 +446,7 @@ start_dns_dhcpd(int is_ap_mode)
 #if defined(SUPPORT_RIDOY_PORTAL)
 		/* RFC 8910: advertise the captive portal URI in DHCP option 114. */
 		if (nvram_match("ridoy_portal_runtime", "1") && is_valid_ipv4(ipaddr))
-			fprintf(fp, "dhcp-option=tag:%s,114,\\"http://%s/captive_portal.html\\"\\n", DHCPD_RANGE_DEF_TAG, ipaddr);
+			fprintf(fp, "dhcp-option=tag:%s,114,\"http://%s/captive_portal.html\"\n", DHCPD_RANGE_DEF_TAG, ipaddr);
 #endif
 
 		/* DOMAIN search */
