@@ -25,17 +25,17 @@ label{display:block;text-align:left;color:#c6d7e8;font-size:13px;margin:14px 0 6
 <main>
   <div class="mark">R</div>
   <h1>Ridoy<span>.Net</span></h1>
-  <p class="sub">Enter your name and device MAC address. The network owner must approve your request before you can use the Internet.</p>
+  <p class="sub">Choose a prepaid data package, then enter your name and one-time secret token to get online.</p>
   <div class="status"><span class="dot"></span> Wi-Fi connected · Sign-in required</div>
   <form method="post" action="/captive_authorize.cgi">
     <input type="hidden" name="ridoy_accept" value="1">
     <label for="ridoy_name">Your name</label>
     <input id="ridoy_name" name="ridoy_name" type="text" maxlength="48" autocomplete="name" placeholder="Enter your name" required>
-    <label for="ridoy_mac">Device MAC address</label>
-    <input id="ridoy_mac" name="ridoy_mac" type="text" maxlength="17" placeholder="AA:BB:CC:DD:EE:FF" pattern="([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}" title="Enter MAC as AA:BB:CC:DD:EE:FF" required>
-    <button style="margin-top:20px" type="submit">Request Approval</button>
+    <label for="ridoy_token">Secret token</label>
+    <input id="ridoy_token" name="ridoy_token" type="text" maxlength="32" autocomplete="off" placeholder="Enter your prepaid token" required>
+    <button style="margin-top:20px" type="submit">Activate Internet</button>
   </form>
-  <p class="note">After submission, your request will appear in the network owner's Pending Requests list. Internet access remains blocked until the owner approves it.</p>
+  <div style="margin-top:22px;text-align:left;border-top:1px solid var(--line);padding-top:16px"><b style="color:var(--cyan)">Available data packages</b><p class="note">1 GB — ৳10 &nbsp; · &nbsp; 2 GB — ৳15<br>5 GB — ৳30 &nbsp; · &nbsp; 10 GB — ৳40<br>25 GB — ৳70 &nbsp; · &nbsp; 50 GB — ৳100</p></div><p class="note">Your token can be used only once and must still be within its redemption validity period. Internet stops when the package data is used up.</p>
   <div class="brand">RIDOY.NET NETWORK</div>
 </main>
 </body>
