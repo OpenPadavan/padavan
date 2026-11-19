@@ -1,7 +1,7 @@
 #!/bin/sh
 # Enforce prepaid Ridoy.Net data quotas using the router's per-client
 # FORWARD byte counters. The watchdog invokes this every 10 seconds.
-CLIENTS=/tmp/ridoy_portal_clients.log
+CLIENTS=/etc/storage/ridoy_portal_clients.log
 STATE=/etc/storage/ridoy_portal_usage.state
 COUNTERS=/tmp/ridoy_portal_counters.$$
 NEXT=/etc/storage/ridoy_portal_usage.state.tmp
