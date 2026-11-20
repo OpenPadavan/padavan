@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <sys/types.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
 #include <sys/socket.h>
@@ -4013,7 +4014,731 @@ static char no_cache_IE[] =
 "Expires: -1"
 ;
 
+#if defined(SUPPORT_RIDOY_PORTAL)
+#define RIDOY_PORTAL_PENDING_FILE "/tmp/ridoy_portal_pending.log"
+#define RIDOY_PORTAL_CLIENTS_FILE "/etc/storage/ridoy_portal_clients.log"
+#define RIDOY_PORTAL_TOKEN_FILE "/etc/storage/ridoy_portal_tokens.db"
+#define RIDOY_PORTAL_TOKEN_LOCK "/etc/storage/ridoy_portal_tokens.lock"
+#define RIDOY_PORTAL_MAX_CLIENTS 64
+
+typedef struct ridoy_portal_record {
+	char name[49];
+	char mac[18];
+	char ip[16];
+	unsigned long stamp;
+	unsigned long long rx;
+	unsigned long long tx;
+	int active;
+	unsigned long long quota_bytes;
+} ridoy_portal_record_t;
+
+static int ridoy_portal_admin_post = 0;
+
+static int
+ridoy_valid_mac(const char *mac)
+{
+	int i;
+	if (!mac || strlen(mac) != 17)
+		return 0;
+	for (i = 0; i < 17; i++) {
+		if ((i % 3) == 2) {
+			if (mac[i] != ':')
+				return 0;
+		} else if (!isxdigit((unsigned char)mac[i])) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+/* The submitted MAC must match the router's ARP entry for the
+ * actual source IP. Never trust a MAC or IP supplied by the form alone. */
+static int
+ridoy_get_client_mac(const char *client_ip, char *mac_out, size_t mac_len)
+{
+	FILE *fp;
+	char line[256], arp_ip[64], arp_mac[32];
+	if (!client_ip || !mac_out || mac_len < 18)
+		return 0;
+	fp = fopen("/proc/net/arp", "r");
+	if (!fp)
+		return 0;
+	if (!fgets(line, sizeof(line), fp)) {
+		fclose(fp);
+		return 0;
+	}
+	while (fgets(line, sizeof(line), fp)) {
+		arp_ip[0] = arp_mac[0] = 0;
+		if (sscanf(line, "%63s %*s %*s %31s", arp_ip, arp_mac) == 2 &&
+		    strcmp(arp_ip, client_ip) == 0 && ridoy_valid_mac(arp_mac)) {
+			snprintf(mac_out, mac_len, "%s", arp_mac);
+			fclose(fp);
+			return 1;
+		}
+	}
+	fclose(fp);
+	return 0;
+}
+
+static int
+ridoy_client_mac_matches(const char *client_ip, const char *submitted_mac)
+{
+	FILE *fp;
+	char line[256], arp_ip[64], arp_mac[32];
+
+	if (!client_ip || !submitted_mac)
+		return 0;
+
+	fp = fopen("/proc/net/arp", "r");
+	if (!fp)
+		return 0;
+
+	if (!fgets(line, sizeof(line), fp)) {
+		fclose(fp);
+		return 0;
+	}
+
+	while (fgets(line, sizeof(line), fp)) {
+		arp_ip[0] = 0;
+		arp_mac[0] = 0;
+		if (sscanf(line, "%63s %*s %*s %31s", arp_ip, arp_mac) == 2 &&
+		    strcmp(arp_ip, client_ip) == 0 &&
+		    strlen(arp_mac) == 17 &&
+		    strcasecmp(arp_mac, submitted_mac) == 0) {
+			fclose(fp);
+			return 1;
+		}
+	}
+
+	fclose(fp);
+	return 0;
+}
+
+static int
+ridoy_parse_record(const char *line, ridoy_portal_record_t *record)
+{
+	unsigned long stamp = 0;
+	int n;
+
+	if (!line || !record)
+		return 0;
+
+	memset(record, 0, sizeof(*record));
+	n = sscanf(line, "%48[^\t]\t%17[^\t]\t%15[^\t]\t%lu\t%llu",
+		   record->name, record->mac, record->ip, &stamp, &record->quota_bytes);
+	if (n < 3 || !record->name[0] ||
+	    (strcmp(record->mac, "-") != 0 && !ridoy_valid_mac(record->mac)) || !is_valid_ipv4(record->ip))
+		return 0;
+
+	record->stamp = (n >= 4) ? stamp : 0;
+	return 1;
+}
+
+static int
+ridoy_load_records(const char *path, ridoy_portal_record_t *records, int max_records)
+{
+	FILE *fp;
+	char line[192];
+	int count = 0;
+
+	fp = fopen(path, "r");
+	if (!fp)
+		return 0;
+
+	while (count < max_records && fgets(line, sizeof(line), fp)) {
+		ridoy_portal_record_t record;
+		if (ridoy_parse_record(line, &record))
+			records[count++] = record;
+	}
+	fclose(fp);
+	return count;
+}
+
+static int
+ridoy_portal_records_lock(void)
+{
+	int i;
+	mkdir("/var/lock", 0755);
+	for (i = 0; i < 40; i++) {
+		if (mkdir("/var/lock/ridoy_portal_quota.lock", 0700) == 0)
+			return 1;
+		if (errno != EEXIST)
+			return 0;
+		usleep(50000);
+	}
+	return 0;
+}
+
+static void
+ridoy_portal_records_unlock(void)
+{
+	rmdir("/var/lock/ridoy_portal_quota.lock");
+}
+
+static int
+ridoy_save_records(const char *path, ridoy_portal_record_t *records, int count)
+{
+	FILE *fp;
+	char tmp[96];
+	int i;
+
+	if (!ridoy_portal_records_lock())
+		return 0;
+	snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+	fp = fopen(tmp, "w");
+	if (!fp) {
+		ridoy_portal_records_unlock();
+		return 0;
+	}
+
+	for (i = 0; i < count; i++) {
+		if (fprintf(fp, "%s\t%s\t%s\t%lu\t%llu\n",
+			    records[i].name, records[i].mac, records[i].ip,
+			    records[i].stamp, records[i].quota_bytes) < 0) {
+			fclose(fp);
+			unlink(tmp);
+			ridoy_portal_records_unlock();
+			return 0;
+		}
+	}
+	if (fclose(fp) != 0 || rename(tmp, path) != 0) {
+		unlink(tmp);
+		ridoy_portal_records_unlock();
+		return 0;
+	}
+	ridoy_portal_records_unlock();
+	return 1;
+}
+
+static int
+ridoy_upsert_record(const char *path, const ridoy_portal_record_t *record)
+{
+	ridoy_portal_record_t records[RIDOY_PORTAL_MAX_CLIENTS];
+	int count, keep = 0, i;
+
+	count = ridoy_load_records(path, records, RIDOY_PORTAL_MAX_CLIENTS);
+	for (i = 0; i < count; i++) {
+		if (strcmp(records[i].ip, record->ip) == 0 ||
+		    (strcmp(record->mac, "-") != 0 && strcasecmp(records[i].mac, record->mac) == 0))
+			continue;
+		records[keep++] = records[i];
+	}
+	if (keep >= RIDOY_PORTAL_MAX_CLIENTS)
+		return 0;
+	records[keep++] = *record;
+	return ridoy_save_records(path, records, keep);
+}
+
+static int
+ridoy_remove_record(const char *path, const char *ip)
+{
+	ridoy_portal_record_t records[RIDOY_PORTAL_MAX_CLIENTS];
+	int count, keep = 0, i;
+
+	count = ridoy_load_records(path, records, RIDOY_PORTAL_MAX_CLIENTS);
+	for (i = 0; i < count; i++) {
+		if (strcmp(records[i].ip, ip) != 0)
+			records[keep++] = records[i];
+	}
+	return ridoy_save_records(path, records, keep);
+}
+
+static int
+ridoy_find_record(const char *path, const char *ip, ridoy_portal_record_t *record)
+{
+	ridoy_portal_record_t records[RIDOY_PORTAL_MAX_CLIENTS];
+	int count, i;
+
+	count = ridoy_load_records(path, records, RIDOY_PORTAL_MAX_CLIENTS);
+	for (i = 0; i < count; i++) {
+		if (strcmp(records[i].ip, ip) == 0) {
+			*record = records[i];
+			return 1;
+		}
+	}
+	return 0;
+}
+
+typedef struct ridoy_voucher {
+	char token[33];
+	int gb;
+	int price;
+	unsigned long expires;
+	int redeemed;
+	char name[49];
+	char ip[16];
+	unsigned long started;
+	unsigned long long quota_bytes;
+} ridoy_voucher_t;
+
+#define RIDOY_VOUCHER_MAX 256
+#define RIDOY_GB_BYTES 1073741824ULL
+
+static int
+ridoy_voucher_allowed(int gb, int days, int *price)
+{
+	switch (gb) {
+	case 1: *price = 10; return (days == 1 || days == 7 || days == 15);
+	case 2: *price = 15; return (days == 1 || days == 7 || days == 15);
+	case 5: *price = 30; return (days == 1 || days == 7 || days == 15);
+	case 10: *price = 40; return (days == 1 || days == 7 || days == 15);
+	case 25: *price = 70; return (days == 1 || days == 7 || days == 15 || days == 30);
+	case 50: *price = 100; return (days == 1 || days == 7 || days == 15 || days == 30);
+	default: return 0;
+	}
+}
+
+static FILE *
+ridoy_voucher_lock(void)
+{
+	FILE *fp;
+	mkdir("/etc/storage", 0755);
+	fp = fopen(RIDOY_PORTAL_TOKEN_LOCK, "a");
+	if (!fp)
+		return NULL;
+	if (flock(fileno(fp), LOCK_EX) != 0) {
+		fclose(fp);
+		return NULL;
+	}
+	return fp;
+}
+
+static int
+ridoy_voucher_read(ridoy_voucher_t *items, int max_items)
+{
+	FILE *fp;
+	char line[256];
+	int n = 0;
+	fp = fopen(RIDOY_PORTAL_TOKEN_FILE, "r");
+	if (!fp)
+		return 0;
+	while (n < max_items && fgets(line, sizeof(line), fp)) {
+		ridoy_voucher_t v;
+		memset(&v, 0, sizeof(v));
+		if (sscanf(line, "%32[^\t]\t%d\t%d\t%lu\t%d\t%48[^\t]\t%15[^\t]\t%lu\t%llu",
+			   v.token, &v.gb, &v.price, &v.expires, &v.redeemed,
+			   v.name, v.ip, &v.started, &v.quota_bytes) == 9)
+			items[n++] = v;
+	}
+	fclose(fp);
+	return n;
+}
+
+static int
+ridoy_voucher_write(ridoy_voucher_t *items, int count)
+{
+	FILE *fp;
+	char tmp[128];
+	int i;
+	snprintf(tmp, sizeof(tmp), "%s.tmp", RIDOY_PORTAL_TOKEN_FILE);
+	fp = fopen(tmp, "w");
+	if (!fp)
+		return 0;
+	chmod(tmp, 0600);
+	for (i = 0; i < count; i++) {
+		if (fprintf(fp, "%s\t%d\t%d\t%lu\t%d\t%s\t%s\t%lu\t%llu\n",
+			    items[i].token, items[i].gb, items[i].price,
+			    items[i].expires, items[i].redeemed, items[i].name,
+			    items[i].ip, items[i].started, items[i].quota_bytes) < 0) {
+			fclose(fp); unlink(tmp); return 0;
+		}
+	}
+	if (fclose(fp) != 0 || rename(tmp, RIDOY_PORTAL_TOKEN_FILE) != 0) {
+		unlink(tmp); return 0;
+	}
+	return 1;
+}
+
+static int
+ridoy_voucher_create(int gb, int days, char *out, size_t outlen, int *price_out)
+{
+	static const char alphabet[] = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+	unsigned char random_bytes[16];
+	ridoy_voucher_t items[RIDOY_VOUCHER_MAX];
+	FILE *random_fp, *lock;
+	int price, count, i, j, duplicate;
+	if (!ridoy_voucher_allowed(gb, days, &price) || outlen < 17)
+		return 0;
+	random_fp = fopen("/dev/urandom", "rb");
+	if (!random_fp)
+		return 0;
+	if (fread(random_bytes, 1, sizeof(random_bytes), random_fp) != sizeof(random_bytes)) {
+		fclose(random_fp); return 0;
+	}
+	fclose(random_fp);
+	for (i = 0; i < 16; i++)
+		out[i] = alphabet[random_bytes[i] & 31];
+	out[16] = 0;
+	lock = ridoy_voucher_lock();
+	if (!lock)
+		return 0;
+	count = ridoy_voucher_read(items, RIDOY_VOUCHER_MAX);
+	if (count >= RIDOY_VOUCHER_MAX) {
+		flock(fileno(lock), LOCK_UN); fclose(lock); return 0;
+	}
+	duplicate = 0;
+	for (i = 0; i < count; i++)
+		if (strcmp(items[i].token, out) == 0) duplicate = 1;
+	if (duplicate) {
+		flock(fileno(lock), LOCK_UN); fclose(lock); return 0;
+	}
+	memset(&items[count], 0, sizeof(items[count]));
+	snprintf(items[count].token, sizeof(items[count].token), "%s", out);
+	items[count].gb = gb;
+	items[count].price = price;
+	snprintf(items[count].name, sizeof(items[count].name), "-");
+	snprintf(items[count].ip, sizeof(items[count].ip), "-");
+	items[count].expires = (unsigned long)time(NULL) + (unsigned long)days * 86400UL;
+	items[count].quota_bytes = (unsigned long long)gb * RIDOY_GB_BYTES;
+	j = ridoy_voucher_write(items, count + 1);
+	flock(fileno(lock), LOCK_UN); fclose(lock);
+	if (j && price_out) *price_out = price;
+	return j;
+}
+
+static int
+ridoy_voucher_redeem(const char *token, const char *name, const char *ip, const char *mac,
+		     unsigned long long *quota, int *gb, int *price)
+{
+	ridoy_voucher_t items[RIDOY_VOUCHER_MAX];
+	ridoy_portal_record_t client;
+	FILE *lock;
+	int count, i, found = -1, ok;
+	unsigned long now = (unsigned long)time(NULL);
+	if (!token || strlen(token) != 16 || !name || !is_valid_ipv4(ip) || !ridoy_valid_mac(mac))
+		return 0;
+	lock = ridoy_voucher_lock();
+	if (!lock)
+		return 0;
+	count = ridoy_voucher_read(items, RIDOY_VOUCHER_MAX);
+	for (i = 0; i < count; i++)
+		if (strcasecmp(items[i].token, token) == 0) { found = i; break; }
+	if (found < 0 || items[found].gb <= 0 || items[found].redeemed || items[found].expires <= now) {
+		flock(fileno(lock), LOCK_UN); fclose(lock); return 0;
+	}
+	items[found].redeemed = 1;
+	snprintf(items[found].name, sizeof(items[found].name), "%s", name);
+	snprintf(items[found].ip, sizeof(items[found].ip), "%s", ip);
+	items[found].started = now;
+	memset(&client, 0, sizeof(client));
+	snprintf(client.name, sizeof(client.name), "%s", name);
+	snprintf(client.mac, sizeof(client.mac), "%s", mac);
+	snprintf(client.ip, sizeof(client.ip), "%s", ip);
+	client.stamp = now;
+	client.quota_bytes = items[found].quota_bytes;
+	ok = ridoy_voucher_write(items, count);
+	if (ok)
+		ok = ridoy_upsert_record(RIDOY_PORTAL_CLIENTS_FILE, &client);
+	if (ok) {
+		char command[128];
+		if (client.quota_bytes == 0)
+			snprintf(command, sizeof(command), "/sbin/ipset add ridoy_portal_allow %s timeout 0 -exist", ip);
+		else
+			snprintf(command, sizeof(command), "/sbin/ipset add ridoy_portal_allow %s -exist", ip);
+		ok = (system(command) == 0);
+		if (ok) {
+			snprintf(command, sizeof(command), "/sbin/iptables -D RIDoyNetAcct -s %s -j RETURN >/dev/null 2>&1; /sbin/iptables -A RIDoyNetAcct -s %s -j RETURN >/dev/null 2>&1; /sbin/iptables -D RIDoyNetAcct -d %s -j RETURN >/dev/null 2>&1; /sbin/iptables -A RIDoyNetAcct -d %s -j RETURN >/dev/null 2>&1", ip, ip, ip, ip);
+			system(command);
+		}
+	}
+	if (!ok) {
+		/* Fail closed: token remains consumed if persistence partially succeeded. */
+		flock(fileno(lock), LOCK_UN); fclose(lock); return 0;
+	}
+	if (quota) *quota = client.quota_bytes;
+	if (gb) *gb = items[found].gb;
+	if (price) *price = items[found].price;
+	flock(fileno(lock), LOCK_UN); fclose(lock);
+	return 1;
+}
+
+static void
+ridoy_json_string(FILE *stream, const char *value)
+{
+	const unsigned char *p = (const unsigned char *)(value ? value : "");
+	websWrite(stream, "\"");
+	while (*p) {
+		if (*p == '"' || *p == '\\')
+			websWrite(stream, "\\%c", *p);
+		else if (*p < 32)
+			websWrite(stream, "\\u%04x", (unsigned int)*p);
+		else
+			websWrite(stream, "%c", *p);
+		p++;
+	}
+	websWrite(stream, "\"");
+}
+
+static void
+ridoy_read_accounting(ridoy_portal_record_t *records, int count)
+{
+	FILE *fp;
+	char line[512], token[64];
+	unsigned long long packets, bytes;
+	int i;
+
+	for (i = 0; i < count; i++) {
+		records[i].rx = 0;
+		records[i].tx = 0;
+	}
+
+	fp = popen("/sbin/iptables-save -c -t filter 2>/dev/null", "r");
+	if (!fp)
+		return;
+
+	while (fgets(line, sizeof(line), fp)) {
+		char *slash;
+		if (sscanf(line, "[%llu:%llu] -A RIDoyNetAcct -s %63s",
+			   &packets, &bytes, token) == 3) {
+			slash = strchr(token, '/');
+			if (slash) *slash = 0;
+			for (i = 0; i < count; i++)
+				if (strcmp(records[i].ip, token) == 0)
+					records[i].tx = bytes;
+		} else if (sscanf(line, "[%llu:%llu] -A RIDoyNetAcct -d %63s",
+				  &packets, &bytes, token) == 3) {
+			slash = strchr(token, '/');
+			if (slash) *slash = 0;
+			for (i = 0; i < count; i++)
+				if (strcmp(records[i].ip, token) == 0)
+					records[i].rx = bytes;
+		}
+	}
+	pclose(fp);
+	/* Prefer persistent cumulative totals so router/firewall restarts do not reset usage. */
+	fp = fopen("/etc/storage/ridoy_portal_usage.state", "r");
+	if (fp) {
+		char state_mac[18], state_ip[16];
+		unsigned long long prev_rx, prev_tx, total_rx, total_tx;
+		while (fscanf(fp, "%17s %15s %llu %llu %llu %llu", state_mac, state_ip, &prev_rx, &prev_tx, &total_rx, &total_tx) == 6) {
+			for (i = 0; i < count; i++) if (strcasecmp(records[i].mac, state_mac) == 0) {
+				records[i].rx = total_rx;
+				records[i].tx = total_tx;
+			}
+		}
+		fclose(fp);
+	}
+}
+
+static int
+ridoy_ipset_is_allowed(const char *ip)
+{
+	char command[128];
+	snprintf(command, sizeof(command),
+		 "/sbin/ipset test ridoy_portal_allow %s >/dev/null 2>&1", ip);
+	return (system(command) == 0);
+}
+
+static void
+do_ridoy_captive_authorize(const char *url, FILE *stream)
+{
+	char safe_name[49], token[33], client_mac[18];
+	const char *name = get_cgi("ridoy_name");
+	const char *submitted_token = get_cgi("ridoy_token");
+	unsigned long long quota = 0;
+	int i, j = 0, gb = 0, price = 0;
+
+	if (!nvram_match("ridoy_portal_runtime", "1") ||
+	    !get_cgi("ridoy_accept") || strcmp(get_cgi("ridoy_accept"), "1") != 0 ||
+	    !is_valid_ipv4(captive_client_ip) || !name || !*name ||
+	    !submitted_token || strlen(submitted_token) != 16) {
+		websWrite(stream, "<!doctype html><html><body><h2>Details required</h2><p>Enter your name and a valid 16-character secret token.</p><a href=\"/captive_portal.html\">Back</a></body></html>");
+		return;
+	}
+	for (i = 0; name[i] && j < 48; i++) {
+		unsigned char ch = (unsigned char)name[i];
+		if (isalnum(ch) || ch == ' ' || ch == '_' || ch == '-')
+			safe_name[j++] = (char)ch;
+	}
+	safe_name[j] = 0;
+	if (!j) {
+		websWrite(stream, "<!doctype html><html><body><h2>Invalid name</h2><p>Please enter a name using letters or numbers.</p><a href=\"/captive_portal.html\">Back</a></body></html>");
+		return;
+	}
+	for (i = 0; i < 16; i++)
+		token[i] = (char)toupper((unsigned char)submitted_token[i]);
+	token[16] = 0;
+	if (!ridoy_get_client_mac(captive_client_ip, client_mac, sizeof(client_mac))) {
+		websWrite(stream, "<!doctype html><html><body><h2>Device not ready</h2><p>Please reconnect to Wi-Fi and try again.</p><a href=\"/captive_portal.html\">Back</a></body></html>");
+		return;
+	}
+	if (!ridoy_voucher_redeem(token, safe_name, captive_client_ip, client_mac, &quota, &gb, &price)) {
+		websWrite(stream, "<!doctype html><html><head><meta charset=\"utf-8\"><title>Ridoy.Net</title></head><body><h2>Token invalid or expired</h2><p>This token may already be used, expired, or incorrect. Contact the network owner.</p><a href=\"/captive_portal.html\">Try again</a></body></html>");
+		return;
+	}
+	websWrite(stream, "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Ridoy.Net</title><style>body{background:#071426;color:#f4f8ff;font:16px system-ui;display:grid;place-items:center;min-height:90vh;text-align:center}.box{padding:32px;border:1px solid #23415f;border-radius:20px;background:#10243c}b{color:#37d6e8}</style></head><body><div class=\"box\"><h2>Internet activated</h2><p>Welcome, <b>");
+	websWrite(stream, safe_name);
+	websWrite(stream, "</b></p><p>Your package: <b>");
+	websWrite(stream, "%d GB</b> · ৳%d</p><p>Your token has been used and cannot be redeemed again.</p><p>Internet access will stop when your data is exhausted.</p></div></body></html>", gb, price);
+}
+
+static void
+do_ridoy_portal_admin_post(const char *url, FILE *stream, int clen, char *boundary)
+{
+	ridoy_portal_admin_post = 1;
+	do_html_apply_post(url, stream, clen, boundary);
+}
+
+static void
+ridoy_portal_admin_result(FILE *stream, int ok, const char *message)
+{
+	websWrite(stream, "{\"ok\":%s,\"message\":", ok ? "true" : "false");
+	ridoy_json_string(stream, message);
+	websWrite(stream, "}");
+}
+
+static void
+ridoy_portal_admin_action(const char *action, const char *ip, FILE *stream)
+{
+	char command[192];
+	ridoy_portal_record_t record;
+
+	if (strcmp(action, "create_token") == 0) {
+		char token[33];
+		int gb = get_cgi("gb") ? atoi(get_cgi("gb")) : 0;
+		int days = get_cgi("validity") ? atoi(get_cgi("validity")) : 0;
+		int price = 0;
+		if (!ridoy_voucher_create(gb, days, token, sizeof(token), &price)) {
+			ridoy_portal_admin_result(stream, 0, "Invalid package/validity or token storage unavailable.");
+			return;
+		}
+		websWrite(stream, "{\"ok\":true,\"message\":\"Voucher created. Copy it now; it is shown only once.\",\"token\":");
+		ridoy_json_string(stream, token);
+		websWrite(stream, ",\"gb\":%d,\"price\":%d,\"validity_days\":%d}", gb, price, days);
+		return;
+	}
+
+	if (!ip || !is_valid_ipv4(ip)) {
+		ridoy_portal_admin_result(stream, 0, "Invalid device IP address.");
+		return;
+	}
+
+	if (strcmp(action, "approve") == 0) {
+		if (!ridoy_find_record(RIDOY_PORTAL_PENDING_FILE, ip, &record)) {
+			ridoy_portal_admin_result(stream, 0, "This request is no longer pending.");
+			return;
+		}
+		if (!ridoy_client_mac_matches(record.ip, record.mac)) {
+			ridoy_portal_admin_result(stream, 0, "Device is no longer on this IP/MAC. Ask it to reconnect and request access again.");
+			return;
+		}
+		snprintf(command, sizeof(command),
+			 "/sbin/ipset add ridoy_portal_allow %s timeout 2592000 -exist", record.ip);
+		if (system(command) != 0) {
+			ridoy_portal_admin_result(stream, 0, "Could not add this device to the allow list.");
+			return;
+		}
+		record.stamp = (unsigned long)time(NULL);
+		if (!ridoy_upsert_record(RIDOY_PORTAL_CLIENTS_FILE, &record)) {
+			snprintf(command, sizeof(command), "/sbin/ipset del ridoy_portal_allow %s >/dev/null 2>&1", record.ip);
+			system(command);
+			ridoy_portal_admin_result(stream, 0, "Could not save the approved-device record.");
+			return;
+		}
+		ridoy_remove_record(RIDOY_PORTAL_PENDING_FILE, record.ip);
+		snprintf(command, sizeof(command),
+			 "/sbin/iptables -D RIDoyNetAcct -s %s -j RETURN >/dev/null 2>&1; /sbin/iptables -A RIDoyNetAcct -s %s -j RETURN >/dev/null 2>&1",
+			 record.ip, record.ip);
+		system(command);
+		snprintf(command, sizeof(command),
+			 "/sbin/iptables -D RIDoyNetAcct -d %s -j RETURN >/dev/null 2>&1; /sbin/iptables -A RIDoyNetAcct -d %s -j RETURN >/dev/null 2>&1",
+			 record.ip, record.ip);
+		system(command);
+		ridoy_portal_admin_result(stream, 1, "Device approved. Internet access is enabled for 24 hours.");
+		return;
+	}
+
+	if (strcmp(action, "reject") == 0) {
+		if (!ridoy_remove_record(RIDOY_PORTAL_PENDING_FILE, ip)) {
+			ridoy_portal_admin_result(stream, 0, "Could not update the pending-request list.");
+			return;
+		}
+		ridoy_portal_admin_result(stream, 1, "Request rejected. Internet remains blocked.");
+		return;
+	}
+
+	if (strcmp(action, "revoke") == 0) {
+		snprintf(command, sizeof(command), "/sbin/ipset del ridoy_portal_allow %s >/dev/null 2>&1", ip);
+		system(command);
+		snprintf(command, sizeof(command), "/sbin/iptables -D RIDoyNetAcct -s %s -j RETURN >/dev/null 2>&1", ip);
+		system(command);
+		snprintf(command, sizeof(command), "/sbin/iptables -D RIDoyNetAcct -d %s -j RETURN >/dev/null 2>&1", ip);
+		system(command);
+		if (!ridoy_remove_record(RIDOY_PORTAL_CLIENTS_FILE, ip)) {
+			ridoy_portal_admin_result(stream, 0, "Access was revoked, but the device record could not be updated.");
+			return;
+		}
+		ridoy_portal_admin_result(stream, 1, "Internet access revoked.");
+		return;
+	}
+
+	ridoy_portal_admin_result(stream, 0, "Unknown action.");
+}
+
+static void
+do_ridoy_portal_admin(const char *url, FILE *stream)
+{
+	ridoy_portal_record_t pending[RIDOY_PORTAL_MAX_CLIENTS];
+	ridoy_portal_record_t approved[RIDOY_PORTAL_MAX_CLIENTS];
+	const char *action = get_cgi("action");
+	const char *ip = get_cgi("ip");
+	int was_post = ridoy_portal_admin_post;
+	int pending_count, approved_count, i;
+
+	ridoy_portal_admin_post = 0;
+
+	if (!nvram_match("ridoy_portal_runtime", "1")) {
+		ridoy_portal_admin_result(stream, 0, "Ridoy.Net captive portal is not active.");
+		return;
+	}
+
+	/* Mutating actions are accepted only from POST requests, never GET links. */
+	if (was_post) {
+		if (!action) {
+			ridoy_portal_admin_result(stream, 0, "Missing action.");
+			return;
+		}
+		ridoy_portal_admin_action(action, ip, stream);
+		return;
+	}
+
+	pending_count = ridoy_load_records(RIDOY_PORTAL_PENDING_FILE, pending, RIDOY_PORTAL_MAX_CLIENTS);
+	approved_count = ridoy_load_records(RIDOY_PORTAL_CLIENTS_FILE, approved, RIDOY_PORTAL_MAX_CLIENTS);
+	ridoy_read_accounting(approved, approved_count);
+
+	for (i = 0; i < approved_count; i++)
+		approved[i].active = ridoy_ipset_is_allowed(approved[i].ip);
+
+	websWrite(stream, "{\"ok\":true,\"pending\":[");
+	for (i = 0; i < pending_count; i++) {
+		if (i) websWrite(stream, ",");
+		websWrite(stream, "{\"name\":"); ridoy_json_string(stream, pending[i].name);
+		websWrite(stream, ",\"mac\":"); ridoy_json_string(stream, pending[i].mac);
+		websWrite(stream, ",\"ip\":"); ridoy_json_string(stream, pending[i].ip);
+		websWrite(stream, ",\"stamp\":%lu}", pending[i].stamp);
+	}
+	websWrite(stream, "],\"approved\":[");
+	for (i = 0; i < approved_count; i++) {
+		if (i) websWrite(stream, ",");
+		websWrite(stream, "{\"name\":"); ridoy_json_string(stream, approved[i].name);
+		websWrite(stream, ",\"mac\":"); ridoy_json_string(stream, approved[i].mac);
+		websWrite(stream, ",\"ip\":"); ridoy_json_string(stream, approved[i].ip);
+		websWrite(stream, ",\"active\":%s,\"rx\":%llu,\"tx\":%llu,\"quota\":%llu,\"remaining\":%llu}",
+			   approved[i].active ? "true" : "false",
+			   approved[i].rx, approved[i].tx, approved[i].quota_bytes,
+			   approved[i].quota_bytes == 0 ? 0ULL :
+			   ((approved[i].rx + approved[i].tx >= approved[i].quota_bytes) ? 0ULL : (approved[i].quota_bytes - approved[i].rx - approved[i].tx)));
+	}
+	websWrite(stream, "]}");
+}
+#endif
+
 struct mime_handler mime_handlers[] = {
+#if defined(SUPPORT_RIDOY_PORTAL)
+	{ "captive_portal.html", "text/html", no_cache_IE, NULL, do_file, 0 },
+	{ "captive_authorize.cgi*", "text/html", no_cache_IE, do_html_apply_post, do_ridoy_captive_authorize, 0 },
+	{ "ridoy_portal_admin.cgi*", "application/json", no_cache_IE, do_ridoy_portal_admin_post, do_ridoy_portal_admin, 1 },
+#endif
 	/* cached javascript files w/o translations */
 	{ "jquery.js", "text/javascript", NULL, NULL, do_file, 0 }, // 2012.06 Eagle23
 	{ "**bootstrap.min.js", "text/javascript", NULL, NULL, do_file, 0 }, // 2012.06 Eagle23

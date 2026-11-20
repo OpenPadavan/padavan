@@ -102,6 +102,9 @@ enum {
 char log_header[32] = {0};
 int auth_nvram_changed = 0;
 int debug_mode = 0;
+#if defined(SUPPORT_RIDOY_PORTAL)
+char captive_client_ip[64] = {0};
+#endif
 #if defined (SUPPORT_HTTPS)
 int http_is_ssl = 0;
 #endif
@@ -834,6 +837,9 @@ handle_request(FILE *conn_fp, const conn_item_t *item)
 	char *method, *path, *protocol, *authorization, *boundary;
 	char *cur, *end, *cp, *file, *query;
 	int len, login_state, method_id, do_logout, clen = 0;
+#if defined(SUPPORT_RIDOY_PORTAL)
+	char request_host[256] = {0};
+#endif
 	time_t if_modified_since = (time_t)-1;
 	struct mime_handler *handler;
 	struct stat st, *p_st = NULL;
@@ -875,6 +881,17 @@ handle_request(FILE *conn_fp, const conn_item_t *item)
 		if (strncasecmp(cur, "Accept-Language:", 16) == 0) {
 			if (!http_has_lang)
 				http_has_lang = set_preferred_lang(cur + 16);
+		}
+		else if (strncasecmp(cur, "Host:", 5) == 0) {
+#if defined(SUPPORT_RIDOY_PORTAL)
+			cp = cur + 5;
+			cp += strspn(cp, " \t");
+			len = strcspn(cp, "\r\n");
+			if (len >= (int)sizeof(request_host))
+				len = sizeof(request_host) - 1;
+			memcpy(request_host, cp, len);
+			request_host[len] = 0;
+#endif
 		}
 		else if (strncasecmp( cur, "Authorization:", 14) == 0) {
 			cp = cur + 14;
@@ -948,8 +965,60 @@ handle_request(FILE *conn_fp, const conn_item_t *item)
 
 	login_state = http_login_check(&conn_ip);
 
+#if defined(SUPPORT_RIDOY_PORTAL)
+	captive_client_ip[0] = 0;
+	if (conn_ip.family == AF_INET)
+		convert_ip_to_string(&conn_ip, captive_client_ip, sizeof(captive_client_ip));
+	if (nvram_match("ridoy_portal_runtime", "1")) {
+		char ipset_cmd[160];
+		char *host_port;
+		const char *router_ip = nvram_safe_get("lan_ipaddr");
+		int is_router_host = 0;
+		int is_portal_endpoint = (strcmp(file, "captive_portal.html") == 0 || strcmp(file, "captive_authorize.cgi") == 0);
+		int is_captive_probe = (strcasecmp(file, "generate_204") == 0 ||
+					strcasecmp(file, "gen_204") == 0 ||
+					strcasecmp(file, "hotspot-detect.html") == 0 ||
+					strcasecmp(file, "connecttest.txt") == 0 ||
+					strcasecmp(file, "ncsi.txt") == 0);
+
+		host_port = strchr(request_host, ':');
+		if (host_port)
+			*host_port = 0;
+		if (request_host[0] && ((router_ip[0] && strcmp(request_host, router_ip) == 0) ||
+		    strcasecmp(request_host, "localhost") == 0 || strcasecmp(request_host, "router.asus.com") == 0))
+			is_router_host = 1;
+
+		if (captive_client_ip[0] && is_valid_ipv4(captive_client_ip)) {
+			snprintf(ipset_cmd, sizeof(ipset_cmd), "/sbin/ipset test ridoy_portal_allow %s >/dev/null 2>&1", captive_client_ip);
+			if (system(ipset_cmd) == 0)
+				is_portal_endpoint = 1;
+		}
+
+		/* Probe URLs must never fall through to the router's normal login page. */
+		if (is_captive_probe)
+			is_router_host = 0;
+
+		if (!is_router_host && !is_portal_endpoint) {
+			char redirect_header[384];
+			const char *portal_ip = is_valid_ipv4(router_ip) ? router_ip : "192.168.0.1";
+			int portal_port = nvram_safe_get_int("http_lanport", 80, 80, 65535);
+			/* Redirect OS connectivity probes and ordinary HTTP requests to the sign-in page. */
+			if (portal_port == 80)
+				snprintf(redirect_header, sizeof(redirect_header),
+					 "Location: http://%s/captive_portal.html\r\nCache-Control: no-store, no-cache, must-revalidate\r\nPragma: no-cache", portal_ip);
+			else
+				snprintf(redirect_header, sizeof(redirect_header),
+					 "Location: http://%s:%d/captive_portal.html\r\nCache-Control: no-store, no-cache, must-revalidate\r\nPragma: no-cache", portal_ip, portal_port);
+			send_headers(302, "Found", redirect_header, "text/html", NULL, conn_fp);
+			fprintf(conn_fp, "<!doctype html><html><body><a href=\"http://%s/captive_portal.html\">Continue to Ridoy.Net</a></body></html>", portal_ip);
+			fflush(conn_fp);
+			return;
+		}
+	}
+#endif
+
 	if (login_state == 0) {
-		if (strstr(file, ".htm") != NULL || strstr(file, ".asp") != NULL) {
+		if ((strstr(file, ".htm") != NULL || strstr(file, ".asp") != NULL) && strcmp(file, "captive_portal.html") != 0) {
 			file = "Nologin.asp";
 			query = NULL;
 		}

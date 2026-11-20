@@ -1137,6 +1137,11 @@ watchdog_on_timer(void)
 
 	is_ap_mode = get_ap_mode();
 
+	/* Enforce prepaid Ridoy.Net voucher quotas from firewall byte counters. */
+#if defined(SUPPORT_RIDOY_PORTAL)
+	system("/bin/sh /usr/sbin/ridoy_portal_quota.sh >/dev/null 2>&1");
+#endif
+
 	/* check for time-dependent services */
 	svc_timecheck();
 

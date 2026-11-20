@@ -775,6 +775,54 @@ get_sshd_bfp_time(int bfp_mode)
 	return i_bfp_time;
 }
 
+#if defined(SUPPORT_RIDOY_PORTAL)
+static void
+ridoy_portal_write_accounting_rules(FILE *fp)
+{
+	FILE *clients;
+	char line[192], name[49], mac[18], ip[16];
+
+	clients = fopen("/etc/storage/ridoy_portal_clients.log", "r");
+	if (!clients)
+		return;
+
+	while (fgets(line, sizeof(line), clients)) {
+		unsigned long stamp = 0;
+		unsigned long long quota = 0, used = 0, a, b, rx_total, tx_total;
+		int exhausted = 0;
+		name[0] = mac[0] = ip[0] = 0;
+		if (sscanf(line, "%48[^\t]\t%17[^\t]\t%15[^\t]\t%lu\t%llu",
+			   name, mac, ip, &stamp, &quota) >= 3 && is_valid_ipv4(ip)) {
+			fprintf(fp, "-A RIDoyNetAcct -s %s -j RETURN\n", ip);
+			fprintf(fp, "-A RIDoyNetAcct -d %s -j RETURN\n", ip);
+			if (quota > 0) {
+				FILE *usage = fopen("/etc/storage/ridoy_portal_usage.state", "r");
+				if (usage) {
+					char state_mac[18], state_ip[16];
+					while (fscanf(usage, "%17s %15s %llu %llu %llu %llu",
+						      state_mac, state_ip, &a, &b, &rx_total, &tx_total) == 6)
+						if (strcasecmp(state_mac, mac) == 0)
+							used = rx_total + tx_total;
+					fclose(usage);
+				}
+				exhausted = (used >= quota);
+			}
+			if (!exhausted) {
+				char command[128];
+				if (quota == 0)
+					snprintf(command, sizeof(command),
+						 "/sbin/ipset add ridoy_portal_allow %s timeout 0 -exist >/dev/null 2>&1", ip);
+				else
+					snprintf(command, sizeof(command),
+						 "/sbin/ipset add ridoy_portal_allow %s -exist >/dev/null 2>&1", ip);
+				system(command);
+			}
+		}
+	}
+	fclose(clients);
+}
+#endif
+
 static int
 ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
                  char *logaccept, char *logdrop, int tcp_mss_need)
@@ -783,10 +831,16 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	char timematch[160], *ftype, *dtype, *vpnc_if;
 	const char *ipt_file = "/tmp/ipt_filter.rules";
 	int ret, wport, lport;
+#if defined(SUPPORT_RIDOY_PORTAL)
+	char lan_net[24] = {0};
+#endif
 	int is_nat_enabled, is_dos_enabled, is_fw_enabled, is_logaccept, is_logdrop;
 	int is_url_enabled, is_lwf_enabled;
 	int i_vpns_enable, i_vpns_type, i_vpns_actl, i_http_proto, i_bfplimit_ref;
 	int i_vpnc_enable, i_vpnc_type, i_vpnc_sfw, i_mac_filter;
+#if defined(SUPPORT_RIDOY_PORTAL)
+	int is_ridoy_portal = nvram_match("ridoy_portal_runtime", "1");
+#endif
 #if defined (APP_OPENVPN)
 	int i_vpns_ov_mode = nvram_get_int("vpns_ov_mode");
 #endif
@@ -795,6 +849,25 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 #endif
 
 	ret = 0;
+#if defined(SUPPORT_RIDOY_PORTAL)
+	/* Initialize the portal before generating IPv4 filter rules. The NAT
+	 * rules are generated later, so initializing it there is too late: the
+	 * FORWARD chain would otherwise be built without the portal rules. */
+#if defined(SUPPORT_HTTPS)
+	i_http_proto = nvram_get_int("http_proto");
+#else
+	i_http_proto = 0;
+#endif
+	if (i_http_proto == 0 || i_http_proto == 2) {
+		module_smart_load("ip_set_hash_ip", NULL);
+		module_smart_load("xt_set", NULL);
+		module_smart_load("xt_quota", NULL);
+		if (system("/sbin/ipset -exist create ridoy_portal_allow hash:ip family inet") == 0)
+			is_ridoy_portal = 1;
+	}
+	nvram_set_int_temp("ridoy_portal_runtime", is_ridoy_portal);
+	ip2class(lan_ip, nvram_safe_get("lan_netmask"), lan_net, sizeof(lan_net));
+#endif
 	i_bfplimit_ref = 0;
 
 	is_logaccept = (strcmp(logaccept, IPT_CHAIN_NAME_LOG_ACCEPT) == 0) ? 1 : 0;
@@ -840,6 +913,10 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 	fprintf(fp, "*%s\n", "filter");
 	fprintf(fp, ":%s %s [0:0]\n", "INPUT", (is_fw_enabled) ? "DROP" : "ACCEPT");
 	fprintf(fp, ":%s %s [0:0]\n", "FORWARD", (is_fw_enabled) ? "DROP" :  "ACCEPT");
+#if defined(SUPPORT_RIDOY_PORTAL)
+	if (is_ridoy_portal)
+		fprintf(fp, ":%s - [0:0]\n", "RIDoyNetAcct");
+#endif
 	fprintf(fp, ":%s %s [0:0]\n", "OUTPUT", "ACCEPT");
 	fprintf(fp, ":%s - [0:0]\n", MINIUPNPD_CHAIN_IP4_FORWARD);
 	fprintf(fp, ":%s - [0:0]\n", IPT_CHAIN_NAME_VPN_LIST);
@@ -1064,6 +1141,15 @@ ipt_filter_rules(char *man_if, char *wan_if, char *lan_if, char *lan_ip,
 
 	// FORWARD chain
 	dtype = "FORWARD";
+
+#if defined(SUPPORT_RIDOY_PORTAL)
+	/* Unapproved IPv4 clients are dropped before accounting or other forwarding rules. */
+	if (is_ridoy_portal) {
+		fprintf(fp, "-A %s -s %s ! -o %s -m set ! --match-set ridoy_portal_allow src -j DROP\n", dtype, lan_net, lan_if);
+		fprintf(fp, "-A %s -j RIDoyNetAcct\n", dtype);
+		ridoy_portal_write_accounting_rules(fp);
+	}
+#endif
 
 	if (i_mac_filter > 0)
 		fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, IPT_CHAIN_NAME_MAC_LIST);
@@ -1412,6 +1498,9 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 	int ret, wport, lport;
 	int ipv6_type, is_fw_enabled, is_url_enabled, is_logaccept, is_logdrop;
 	int i_http_proto, i_bfplimit_ref, i_mac_filter;
+#if defined(SUPPORT_RIDOY_PORTAL)
+	int is_ridoy_portal = nvram_match("ridoy_portal_runtime", "1");
+#endif
 	const char *ipt_file = "/tmp/ip6t_filter.rules";
 
 	ret = 0;
@@ -1585,6 +1674,12 @@ ip6t_filter_rules(char *man_if, char *wan_if, char *lan_if,
 
 	// FORWARD chain (accept_source_route=0 by default, no needed drop RH0 packet)
 	dtype = "FORWARD";
+
+#if defined(SUPPORT_RIDOY_PORTAL)
+	/* IPv6 is blocked while the IPv4-only portal is active, preventing an IPv6 bypass. */
+	if (is_ridoy_portal)
+		fprintf(fp, "-A %s ! -o %s -j DROP\n", dtype, lan_if);
+#endif
 
 	if (i_mac_filter > 0)
 		fprintf(fp, "-A %s -i %s -j %s\n", dtype, lan_if, IPT_CHAIN_NAME_MAC_LIST);
@@ -1774,6 +1869,9 @@ ipt_nat_rules(char *man_if, char *man_ip,
 	const char *ipt_file = "/tmp/ipt_nat.rules";
 	int wport, lport, is_nat_enabled, is_fw_enabled, is_upnp_enabled;
 	int i_vpns_enable, i_vpnc_enable, i_vpns_type, i_vpnc_type, i_vpnc_sfw, i_http_proto;
+#if defined(SUPPORT_RIDOY_PORTAL)
+	int is_ridoy_portal = 0;
+#endif
 #if defined (APP_OPENVPN)
 	int i_vpns_ov_mode = nvram_get_int("vpns_ov_mode");
 #endif
@@ -1781,6 +1879,23 @@ ipt_nat_rules(char *man_if, char *man_ip,
 	is_nat_enabled = nvram_match("wan_nat_x", "1");
 	is_fw_enabled = nvram_match("fw_enable_x", "1");
 	is_upnp_enabled = nvram_invmatch("upnp_enable_x", "0");
+
+#if defined(SUPPORT_RIDOY_PORTAL)
+#if defined(SUPPORT_HTTPS)
+	i_http_proto = nvram_get_int("http_proto");
+#else
+	i_http_proto = 0;
+#endif
+	/* Ridoy.Net access control is enabled by default on this build. */
+	if (i_http_proto == 0 || i_http_proto == 2) {
+		/* Load the IP-set kernel modules before creating the allowlist and rules that use -m set. */
+		module_smart_load("ip_set_hash_ip", NULL);
+		module_smart_load("xt_set", NULL);
+		if (system("/sbin/ipset -exist create ridoy_portal_allow hash:ip family inet timeout 2592000") == 0)
+			is_ridoy_portal = 1;
+	}
+	nvram_set_int_temp("ridoy_portal_runtime", is_ridoy_portal);
+#endif
 
 	i_vpns_enable = nvram_get_int("vpns_enable");
 	i_vpnc_enable = nvram_get_int("vpnc_enable");
@@ -1841,6 +1956,17 @@ ipt_nat_rules(char *man_if, char *man_ip,
 	/* pre-routing from VPN client */
 	if (vpnc_if && i_vpnc_sfw == 3)
 		fprintf(fp, "-A PREROUTING -i %s ! -d %s -j %s\n", vpnc_if, lan_net, dtype);
+
+#if defined(SUPPORT_RIDOY_PORTAL)
+	if (is_ridoy_portal) {
+		int portal_http_port = nvram_safe_get_int("http_lanport", 80, 80, 65535);
+		/* Keep DNS on the router so captive clients can resolve the router and trigger HTTP probes. */
+		fprintf(fp, "-A PREROUTING -s %s -p udp --dport 53 -m set ! --match-set ridoy_portal_allow src -j DNAT --to-destination %s:53\n", lan_net, lan_ip);
+		fprintf(fp, "-A PREROUTING -s %s -p tcp --dport 53 -m set ! --match-set ridoy_portal_allow src -j DNAT --to-destination %s:53\n", lan_net, lan_ip);
+		/* Redirect only unapproved plain-HTTP requests to the router's existing web server. */
+		fprintf(fp, "-A PREROUTING -s %s -p tcp --dport 80 -m set ! --match-set ridoy_portal_allow src -j REDIRECT --to-ports %d\n", lan_net, portal_http_port);
+	}
+#endif
 
 	if (is_nat_enabled) {
 		char dmz_ip[16];

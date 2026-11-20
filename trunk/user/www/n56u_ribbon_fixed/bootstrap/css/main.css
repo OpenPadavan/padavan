@@ -14,12 +14,7 @@ body.body_iframe{
     margin: 0 auto;
 }
 
-#logo {
-    background-image: url("/bootstrap/img/padavan_logo.png");
-    width: 150px;
-    height: 71px;
-    margin-top: 40px;
-}
+#logo { background: url('/bootstrap/img/ridoynet_logo.png?v=ridoy-user-logo-20261119d') center center / contain no-repeat !important; width: 220px !important; height: 84px !important; margin-top: 18px !important; }
 #logo:hover {
     cursor: pointer;
 }
@@ -614,3 +609,53 @@ textarea[readonly] {
     border-radius: 3px 0 0 3px;
 }
 
+
+
+
+
+
+
+/* Ridoy.Net branding */
+#logo { background: url('/bootstrap/img/ridoynet_logo.png?v=ridoy-user-logo-20261119d') center center / contain no-repeat !important; width: 220px !important; height: 84px !important; margin-top: 18px !important; }
+#footer, #footer * { display:none !important; visibility:hidden !important; height:0 !important; margin:0 !important; padding:0 !important; }
+
+
+/* Final user-supplied Ridoy.Net logo: shared header on every router tab */
+#logo {
+    background: #ffffff url('/bootstrap/img/ridoynet_logo.png?v=ridoy-user-logo-20261119d') center center / contain no-repeat !important;
+    width: 168px !important;
+    height: 108px !important;
+    margin: 8px auto 10px !important;
+    border-radius: 6px !important;
+    box-sizing: border-box !important;
+}
+/* Keep Padavan footer fully hidden */
+#footer, #footer * {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+
+/* Final Ridoy.Net branding — supplied logo on every router tab */
+#logo, .logo {
+    display: block !important;
+    background: transparent url('/bootstrap/img/ridoynet_logo.png?v=ridoynet-logo-all-tabs-20261119f') center center / contain no-repeat !important;
+    width: 220px !important;
+    height: 62px !important;
+    margin: 18px auto 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    box-sizing: border-box !important;
+}
+#logo::after, .logo::after { content: none !important; display: none !important; }
+#footer, #footer * {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}

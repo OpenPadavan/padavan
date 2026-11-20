@@ -113,6 +113,10 @@ endif
 # Project .config related params
 ##################################################################
 
+ifeq ($(CONFIG_FIRMWARE_INCLUDE_RIDOY_PORTAL),y)
+CFLAGS += -DSUPPORT_RIDOY_PORTAL
+endif
+
 CFLAGS += -DFWVERSTR=\"$(FIRMWARE_KERNEL_VER).$(FIRMWARE_ROOTFS_VER)\"
 CFLAGS += $(if $(FIRMWARE_BUILDS_VER),-DFWBLDSTR=\"$(FIRMWARE_BUILDS_VER)\",)
 CFLAGS += $(if $(FIRMWARE_BUILDS_REV),-DFWREVSTR=\"$(FIRMWARE_BUILDS_REV)\",)

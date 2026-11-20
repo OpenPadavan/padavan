@@ -2,7 +2,21 @@ name: build
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, feature/prepaid-voucher-quota ]
+    paths:
+      - 'trunk/configs/templates/tplink/tl_wr845n-v4.config'
+      - 'trunk/configs/boards/TPLINK/TL_WR845N-V4/kernel-3.4.x.config'
+      - 'trunk/build_firmware.sh'
+      - 'trunk/user/www/n56u_ribbon_fixed/**'
+      - 'trunk/user/httpd/**'
+      - 'trunk/user/rc/**'
+      - 'trunk/user/shared/cflags.mk'
+      - 'trunk/user/shared/defaults.c'
+      - 'trunk/user/www/n56u_ribbon_fixed/bootstrap/css/main.css'
+      - 'trunk/user/www/n56u_ribbon_fixed/state.js'
+      - 'trunk/user/www/n56u_ribbon_fixed/bootstrap/img/padavan_logo.png'
+      - 'trunk/user/www/n56u_ribbon_fixed/bootstrap/img/ridoynet_logo.png'
+      - '.github/workflows/build.yml'
   pull_request:
   workflow_dispatch:
     inputs:
@@ -56,7 +70,7 @@ jobs:
   resolve-boards:
     name: Resolve board list
     runs-on: ubuntu-22.04
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     outputs:
       boards: ${{ steps.resolve.outputs.boards }}
       config: ${{ steps.resolve.outputs.config }}
@@ -67,8 +81,8 @@ jobs:
       - name: Validate boards and config overrides
         id: resolve
         env:
-          REQUESTED_BOARDS: ${{ inputs.boards }}
-          CUSTOM_CONFIG: ${{ inputs.config }}
+          REQUESTED_BOARDS: ${{ github.event_name == 'workflow_dispatch' && inputs.boards || 'tplink/tl_wr845n-v4' }}
+          CUSTOM_CONFIG: ${{ inputs.config || '' }}
         run: |
           set -euo pipefail
 
@@ -136,7 +150,7 @@ jobs:
   build-image:
     name: Build container image
     runs-on: ubuntu-22.04
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     permissions:
       contents: read
       packages: write
@@ -158,7 +172,7 @@ jobs:
   build-toolchain:
     name: Build cross toolchain
     runs-on: ubuntu-22.04
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     permissions:
       contents: read
       actions: write
@@ -203,7 +217,7 @@ jobs:
   build-firmware:
     name: Build firmware (${{ matrix.board }})
     runs-on: ubuntu-22.04
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     permissions:
       contents: read
       actions: write
@@ -262,6 +276,47 @@ jobs:
           echo "[$(date -u '+%H:%M:%S')] custom config overrides applied:"
           printf '%s\n' "$CUSTOM_CONFIG"
 
+      - name: Apply Ridoy.Net logo to every web UI tab
+        run: |
+          set -euo pipefail
+          WWW_DIR="trunk/user/www/n56u_ribbon_fixed"
+          LOGO="$WWW_DIR/bootstrap/img/ridoynet_logo.png"
+          CACHE_VERSION="ridoynet-logo-all-tabs-20261119f"
+
+          # Every page gets a fresh URL for the shared stylesheet, avoiding old Padavan CSS in browser cache.
+          test -s "$LOGO"
+          # Also replace the legacy Padavan-named asset so hard-coded tabs cannot show Padavan branding.
+          cp "$LOGO" "$WWW_DIR/bootstrap/img/padavan_logo.png"
+          find "$WWW_DIR" -type f \( -name "*.asp" -o -name "*.htm" -o -name "*.html" \) \
+            -exec sed -i -E 's#(/bootstrap/css/main\.css)(\?[^"]*)?#\1?v=ridoynet-logo-all-tabs-20261119e#g' {} +
+
+          # Apply the supplied image logo and keep the footer hidden in every page using the shared stylesheet.
+          cat >> "$WWW_DIR/bootstrap/css/main.css" <<'RIDoyBRANDING'
+          
+          /* Final shared Ridoy.Net branding: all router tabs */
+          #logo, .logo {
+            display: block !important;
+            background-color: transparent !important;
+            background-image: url('/bootstrap/img/ridoynet_logo.png?v=ridoynet-logo-all-tabs-20261119e') !important;
+            background-position: center center !important;
+            background-size: contain !important;
+            background-repeat: no-repeat !important;
+            width: 220px !important;
+            height: 62px !important;
+            margin: 18px auto 0 !important;
+            border-radius: 0 !important;
+            box-sizing: border-box !important;
+            border: 0 !important;
+            box-shadow: none !important;
+          }
+          #footer, #footer * {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          RIDoyBRANDING
       - name: Download source tarballs (strongswan)
         working-directory: trunk
         run: |
@@ -310,3 +365,5 @@ jobs:
           path: trunk/images/*
           retention-days: 30
           if-no-files-found: error
+
+# Rebuild firmware using the active feature branch implementation.

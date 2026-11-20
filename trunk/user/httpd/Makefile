@@ -9,6 +9,7 @@ include $(SHDIR)/boards.mk
 include $(SHDIR)/cflags.mk
 
 CFLAGS  += -ffunction-sections -fdata-sections -fvisibility=hidden
+CFLAGS  += -DSUPPORT_RIDOY_PORTAL
 LDFLAGS += -Wl,--gc-sections
 
 CFLAGS += $(if $(TPLINK_HWID),-DTPLINK_HWID=$(TPLINK_HWID),)

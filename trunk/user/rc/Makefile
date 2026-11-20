@@ -10,6 +10,7 @@ include $(SHDIR)/boards.mk
 include $(SHDIR)/cflags.mk
 
 CFLAGS += -ffunction-sections -fdata-sections -fvisibility=hidden -s -I. -I$(SHDIR) -I$(SHDIR)/include
+CFLAGS += -DSUPPORT_RIDOY_PORTAL
 CFLAGS += -I$(USERDIR)/wireless_tools
 CFLAGS += -I$(ROOTDIR)/$(LINUXDIR)/include/ralink
 
@@ -82,6 +83,7 @@ clean:
 
 romfs:
 	$(ROMFSINST) /sbin/$(EXEC)
+	$(ROMFSINST) ridoy_portal_quota.sh /usr/sbin/ridoy_portal_quota.sh
 	cd $(INSTALLDIR) && rm -f init && ln -sf sbin/rc init
 	cd $(INSTALLDIR)/sbin && ln -sf rc init
 	cd $(INSTALLDIR)/sbin && ln -sf rc watchdog
