@@ -222,7 +222,7 @@ function initial() {
     /* Start the router API request first. A theme/menu JavaScript error
        must never leave this page stuck on "Waiting for router data". */
     portalLoad();
-    window.setInterval(portalLoad, 5000);
+    window.setInterval(portalLoad, 2000);
     try { if (typeof show_banner === "function") show_banner(0); } catch(e) {}
     try { if (typeof show_menu === "function") show_menu(7, 5, 6); } catch(e) {}
     try { if (typeof show_footer === "function") show_footer(); } catch(e) {}
