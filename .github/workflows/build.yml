@@ -365,3 +365,5 @@ jobs:
           path: trunk/images/*
           retention-days: 30
           if-no-files-found: error
+
+# Rebuild firmware using the active feature branch implementation.
